@@ -12,11 +12,11 @@ window.addEventListener('DOMContentLoaded', function() {
 
   // We want to wait until the localisations library has loaded all the strings.
   // So we'll tell it to let us know once it's ready.
-  navigator.mozL10n.once(start);
+  //navigator.mozL10n.once(start);
 
   // ---
 
-  function start() {
+  /*function start() {
 
     var message = document.getElementById('message');
 
@@ -24,6 +24,13 @@ window.addEventListener('DOMContentLoaded', function() {
     // https://developer.mozilla.org/Web/API/Element.innerHTML#Security_considerations
     message.textContent = translate('message');
 
-  }
+  }*/
 
+
+  $("#test_button").click(function() {
+    console.log("button clicked");
+    $.getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json", function (data) {
+       console.log(data);
+    });
+  });
 });
