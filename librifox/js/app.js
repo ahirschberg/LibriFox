@@ -23,6 +23,7 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 
 var searchId = document.getElementById('search');
-$("#search").bind("change", function(){
-  // Searches through stuff
-})
+var newSearch = document.getElementById('newSearch');
+$("#newSearch").submit(function(){
+  console.log("ITEMS SEARCHED FOR");
+});
