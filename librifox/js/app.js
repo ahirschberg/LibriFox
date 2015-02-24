@@ -34,3 +34,8 @@ window.addEventListener('DOMContentLoaded', function() {
     });
   });
 });
+
+var searchId = document.getElementById('search');
+$("#search").bind("change", function(){
+  // Searches through stuff
+})
