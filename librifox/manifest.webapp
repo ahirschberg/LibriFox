@@ -14,7 +14,9 @@
     "url": "http://example.com"
   },
   "type": "privileged",
-  "permissions": {},
+  "permissions": {
+    "systemXHR": {"description": "Necessary for fetching data from the LibriVox server"}
+  },
   "installs_allowed_from": [
     "*"
   ],

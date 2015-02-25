@@ -12,18 +12,30 @@ window.addEventListener('DOMContentLoaded', function() {
 
   // We want to wait until the localisations library has loaded all the strings.
   // So we'll tell it to let us know once it's ready.
-  navigator.mozL10n.once(start);
+  //navigator.mozL10n.once(start);
 
   // ---
 
-  function start(){
-    console.log("App started.");
-  }
+  /*function start() {
 
-});
+    var message = document.getElementById('message');
 
-var searchId = document.getElementById('search');
-var newSearch = document.getElementById('newSearch');
-$("#newSearch").submit(function(){
-  console.log("ITEMS SEARCHED FOR");
+    // We're using textContent because inserting content from external sources into your page using innerHTML can be dangerous.
+    // https://developer.mozilla.org/Web/API/Element.innerHTML#Security_considerations
+    message.textContent = translate('message');
+
+  }*/
+  $("#test_button").click(function() {
+    console.log("button clicked");
+    $.getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json", function (data) {
+       console.log(data);
+    });
+  });
+  
+  var newSearch = document.getElementById('newSearch');
+  var search = document.getElementById('search');
+  $("#newSearch").submit(function(){
+    var input = $("#search").val();
+    //<-- Input would be searched via JSON, see website for details -->
+  });
 });
