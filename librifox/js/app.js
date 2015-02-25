@@ -25,10 +25,15 @@ window.addEventListener('DOMContentLoaded', function() {
     message.textContent = translate('message');
 
   }*/
-
-
   $("#test_button").click(function() {
     getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json"); // test url
+  });
+  
+  var newSearch = document.getElementById('newSearch');
+  var search = document.getElementById('search');
+  $("#newSearch").submit(function(){
+    var input = $("#search").val();
+    //<-- Input would be searched via JSON, see website for details -->
   });
 });
 
