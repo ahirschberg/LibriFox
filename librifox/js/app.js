@@ -28,10 +28,7 @@ window.addEventListener('DOMContentLoaded', function() {
 
 
   $("#test_button").click(function() {
-    console.log("button clicked");
-    $.getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json", function (data) {
-       console.log(data);
-    });
+    getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json"); // test url
   });
 });
 
@@ -39,3 +36,28 @@ var searchId = document.getElementById('search');
 $("#search").bind("change", function(){
   // Searches through stuff
 })
+
+var _xhr; //temp global scope variable for debugging
+function getJSON(url) {
+  var xhr = new XMLHttpRequest({ mozSystem: true });
+  if (xhr.overrideMimeType) {
+    xhr.overrideMimeType('application/json');
+  }
+
+  var callback = function(e) {
+    console.log("error! :(");
+    console.log(e);
+  }
+  xhr.addEventListener('load', function(e) {
+    _xhr = xhr;
+    console.log(xhr.response);
+  });
+
+  xhr.addEventListener('error', callback);
+  xhr.addEventListener('timeout', callback);
+  xhr.open('GET', url);
+
+  xhr.responseType = 'json';
+  //console.log(xhr);
+  xhr.send(); //for some reason open doesn't actually send the request :P
+}
