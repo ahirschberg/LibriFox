@@ -37,11 +37,6 @@ window.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-var searchId = document.getElementById('search');
-$("#search").bind("change", function(){
-  // Searches through stuff
-})
-
 var _xhr; //temp global scope variable for debugging
 function getJSON(url) {
   var xhr = new XMLHttpRequest({ mozSystem: true });
