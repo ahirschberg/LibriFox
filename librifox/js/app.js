@@ -27,14 +27,45 @@ window.addEventListener('DOMContentLoaded', function() {
   }*/
   var newSearch = document.getElementById('newSearch');
   var search = document.getElementById('search');
-  var volumeAmt = $("#volumeSlider").slider("option", "value");
+  var volumeAmt = $("#volumeSlider").val();
+  
+  // -- Save Settings File (if nonexistent)
+  
+  var sdcard = navigator.getDeviceStorage("sdcard");
+  var file = new Blob(["This is a text file."], {type: "text/plain"});
+  function saveDefaultSettings(){
+    var request = sdcard.addNamed(file, "librifox-settings.txt");
+    request.onsuccess = function () {
+      var name = this.result;
+      console.log('File "' + name + '" successfully wrote on the sdcard storage area');
+    }
+    request.onerror = function () {
+      console.warn('Unable to write settings file: ' + this.error);
+    }
+  }
+  function getSettings(){
+    var sdcard = navigator.getDeviceStorage('sdcard');
+    var request = sdcard.get("librifox-settings.txt");
+    request.onsuccess = function () {
+      var file = this.result;
+      console.log("Get the file: " + file.name);
+    }
+    request.onerror = function () {
+      console.warn("Unable to get the file: " + this.error);
+    }
+  }
+  // An error typically occurs if a file with the same name already exists
+  
   $("#test_button").click(function() {
     getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json"); // test url
   });
-  
+  $("#volumeSlider").change(function(){
+    // Set volume variable in settings
+  })
   $("#newSearch").submit(function(){
     var input = $("#search").val();
     //<-- Input would be searched via JSON, see website for details -->
+    getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "&format=json");
     console.log(volumeAmt);
     console.log(input);
   });

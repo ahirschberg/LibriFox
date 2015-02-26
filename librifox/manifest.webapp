@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
   "name": "LibriFox",
-  "description": "A template with the bare minimum structure",
+  "description": "A port of the LibriVox app for Firefox OS",
   "launch_path": "/index.html",
   "icons": {
     "16": "/img/icons/icon16x16.png",
@@ -22,8 +22,8 @@
   ],
   "locales": {
     "es": {
-      "name": "Aplicación vacía privilegiada",
-      "description": "Una plantilla con la mínima estructura",
+      "name": "LibriFox",
+      "description": "Una aplicación de LibriVox para Firefox OS",
       "permissions": {}
     }
   },
