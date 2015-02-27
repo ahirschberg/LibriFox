@@ -59,9 +59,12 @@ window.addEventListener('DOMContentLoaded', function() {
 
   $("#newSearch").submit(function(){
     var input = encodeURIComponent( $("#search").val() );
+    // URL Works, Input Works - getJSON returns null response
+    var url = ("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json");
     //<-- Input would be searched via JSON, see website for details -->
     // Input now works
-    var json = getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json").response;
+    console.log(getJSON(url).response);
+    var json = getJSON(url).response;
     json.books.forEach(function(entry){
       $("#listView").append(entry.title);
       $("#listView").listView('refresh');
@@ -90,17 +93,9 @@ function getJSON(url) {
   xhr.addEventListener('error', callback);
   xhr.addEventListener('timeout', callback);
   xhr.open('GET', url);
-
-<<<<<<< HEAD
+  
   xhr.responseType = 'json';
   xhr.send();
 
   return xhr;
 }
-=======
-    xhr.responseType = 'json';
-    xhr.send();
-    
-    return xhr;
-  }
->>>>>>> 82a344da73513564bb18ec4e35841055e9989410
