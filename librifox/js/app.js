@@ -9,7 +9,7 @@ window.addEventListener('DOMContentLoaded', function() {
   'use strict';
 
   var translate = navigator.mozL10n.get;
-
+  checkSettings();
   // We want to wait until the localisations library has loaded all the strings.
   // So we'll tell it to let us know once it's ready.
   //navigator.mozL10n.once(start);
@@ -25,35 +25,30 @@ window.addEventListener('DOMContentLoaded', function() {
     message.textContent = translate('message');
 
   }*/
+});
   var newSearch = document.getElementById('newSearch');
   var search = document.getElementById('search');
-  var volumeAmt = $("#volumeSlider").val();
+  var volumeAmt = getValue("volume");
   
-  // -- Save Settings File (if nonexistent)
-  
-  var sdcard = navigator.getDeviceStorage("sdcard");
-  var file = new Blob(["This is a text file."], {type: "text/plain"});
-  function saveDefaultSettings(){
-    var request = sdcard.addNamed(file, "librifox-settings.txt");
-    request.onsuccess = function () {
-      var name = this.result;
-      console.log('File "' + name + '" successfully wrote on the sdcard storage area');
-    }
-    request.onerror = function () {
-      console.warn('Unable to write settings file: ' + this.error);
+  // -- Save Settings File (if nonexistent)  
+  function writeToSettings(key, value){
+    if(window.localStorage){
+      localStorage.setItem(key, value);
     }
   }
-  function getSettings(){
-    var sdcard = navigator.getDeviceStorage('sdcard');
-    var request = sdcard.get("librifox-settings.txt");
-    request.onsuccess = function () {
-      var file = this.result;
-      console.log("Get the file: " + file.name);
-    }
-    request.onerror = function () {
-      console.warn("Unable to get the file: " + this.error);
+  function getValue(key){
+    if(window.localStorage){
+      localStorage.getItem(key);
     }
   }
+  function checkSettings(){
+    if(window.localStorage){
+  //    if((getValue("volume") == null) || (getValue("volume") == 'undefined')){
+  //      writeToSettings("volume", "60");  // -> Fix: Volume is just resetting every app restart
+  //    }
+    }
+  }
+// TODO Check how to save localStorage
   // An error typically occurs if a file with the same name already exists
   
   $("#test_button").click(function() {
@@ -66,32 +61,31 @@ window.addEventListener('DOMContentLoaded', function() {
     var input = $("#search").val();
     //<-- Input would be searched via JSON, see website for details -->
     getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "&format=json");
-    console.log(volumeAmt);
     console.log(input);
-  });
-});
-
-var _xhr; //temp global scope variable for debugging
-function getJSON(url) {
-  var xhr = new XMLHttpRequest({ mozSystem: true });
-  if (xhr.overrideMimeType) {
-    xhr.overrideMimeType('application/json');
-  }
-
-  var callback = function(e) {
-    console.log("error! :(");
-    console.log(e);
-  }
-  xhr.addEventListener('load', function(e) {
-    _xhr = xhr;
-    console.log(xhr.response);
+    console.log(volumeAmt);
   });
 
-  xhr.addEventListener('error', callback);
-  xhr.addEventListener('timeout', callback);
-  xhr.open('GET', url);
+  var _xhr; //temp global scope variable for debugging
+  function getJSON(url) {
+    var xhr = new XMLHttpRequest({ mozSystem: true });
+    if (xhr.overrideMimeType) {
+      xhr.overrideMimeType('application/json');
+    }
 
-  xhr.responseType = 'json';
-  //console.log(xhr);
-  xhr.send(); //for some reason open doesn't actually send the request :P
-}
+    var callback = function(e) {
+      console.log("error! :(");
+      console.log(e);
+    }
+    xhr.addEventListener('load', function(e) {
+      _xhr = xhr;
+      console.log(xhr.response);
+    });
+
+    xhr.addEventListener('error', callback);
+    xhr.addEventListener('timeout', callback);
+    xhr.open('GET', url);
+
+    xhr.responseType = 'json';
+    //console.log(xhr);
+    xhr.send(); //for some reason open doesn't actually send the request :P
+  }
