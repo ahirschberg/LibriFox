@@ -50,12 +50,8 @@ window.addEventListener('DOMContentLoaded', function() {
   }
 // TODO Check how to save localStorage
   // An error typically occurs if a file with the same name already exists
-  
-  $("#test_button").click(function() {
-    getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json"); // test url
-  });
   $("#volumeSlider").change(function(){
-    // Set volume variable in settings
+    writeToSettings("volume", $("#volumeSlider").slider("value").val());
   })
   $("#newSearch").submit(function(){
     var input = encodeURIComponent($("#search").val());
