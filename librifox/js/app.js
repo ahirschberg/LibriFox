@@ -54,16 +54,13 @@ window.addEventListener('DOMContentLoaded', function() {
   });
   $("#newSearch").submit(function(){
     var input = encodeURIComponent( $("#search").val() );
-    // URL Works, Input Works - getJSON returns null response
     var url = ("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json");
-    //<-- Input would be searched via JSON, see website for details -->
-    // Input now works
     var json = getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json",function(xhr) {
       console.log(xhr); // this works :)
       // onLoad Callback... display results!
       console.log(xhr.response);
       console.log(xhr.response.books);
-      $("#list").trigger("create"); // Initialize the list?
+      $("#list").trigger("create"); // Initialize the list? ... Issues either here or with refreshing...
       xhr.response.books.forEach(function(entry){
         var listItem = '<li>' + entry.title + '</li>';
         console.log("listItem " + listItem);
