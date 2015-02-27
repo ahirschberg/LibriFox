@@ -60,12 +60,8 @@ window.addEventListener('DOMContentLoaded', function() {
   $("#newSearch").submit(function(){
     var input = encodeURIComponent($("#search").val());
     //<-- Input would be searched via JSON, see website for details -->
-    console.log("Input.serialize returns " + input);
-    
-    console.log("URL returns " + "https://librivox.org/api/feed/audiobooks/title/^" + input + "?format=json");
-    console.log(getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json"));
-    console.log(input);
-    console.log(volumeAmt);
+    // Input now works
+    getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json");
   });
 
   var _xhr; //temp global scope variable for debugging
