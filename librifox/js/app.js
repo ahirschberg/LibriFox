@@ -61,7 +61,9 @@ window.addEventListener('DOMContentLoaded', function() {
     var input = encodeURIComponent( $("#search").val() );
     //<-- Input would be searched via JSON, see website for details -->
     // Input now works
-    var json = getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json").response;
+    var json = getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json",function(xhr) {
+      console.log(xhr); // this works :)
+    });
     json.books.forEach(function(entry){
       $("#listView").append(entry.title);
       $("#listView").listView('refresh');
@@ -72,7 +74,7 @@ window.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-function getJSON(url) {
+function getJSON(url, load_callback) {
   var xhr = new XMLHttpRequest({ mozSystem: true });
   if (xhr.overrideMimeType) {
     xhr.overrideMimeType('application/json');
@@ -83,24 +85,15 @@ function getJSON(url) {
     console.log(e);
   }
   xhr.addEventListener('load', function(e) {
-    //console.log("json successfully loaded from " + url);
-    //console.log(xhr.response);
+    load_callback(xhr,e);
   });
 
   xhr.addEventListener('error', callback);
   xhr.addEventListener('timeout', callback);
   xhr.open('GET', url);
 
-<<<<<<< HEAD
   xhr.responseType = 'json';
   xhr.send();
 
   return xhr;
 }
-=======
-    xhr.responseType = 'json';
-    xhr.send();
-    
-    return xhr;
-  }
->>>>>>> 82a344da73513564bb18ec4e35841055e9989410
