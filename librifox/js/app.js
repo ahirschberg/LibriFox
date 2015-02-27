@@ -65,7 +65,6 @@ window.addEventListener('DOMContentLoaded', function() {
     console.log(volumeAmt);
   });
 
-  var _xhr; //temp global scope variable for debugging
   function getJSON(url) {
     var xhr = new XMLHttpRequest({ mozSystem: true });
     if (xhr.overrideMimeType) {
@@ -73,11 +72,11 @@ window.addEventListener('DOMContentLoaded', function() {
     }
 
     var callback = function(e) {
-      console.log("error! :(");
+      console.log("error loading json from url " + url);
       console.log(e);
     }
     xhr.addEventListener('load', function(e) {
-      _xhr = xhr;
+      console.log("json successfully loaded from " + url);
       console.log(xhr.response);
     });
 
@@ -86,6 +85,7 @@ window.addEventListener('DOMContentLoaded', function() {
     xhr.open('GET', url);
 
     xhr.responseType = 'json';
-    //console.log(xhr);
-    xhr.send(); //for some reason open doesn't actually send the request :P
+    xhr.send();
+    
+    return xhr;
   }
