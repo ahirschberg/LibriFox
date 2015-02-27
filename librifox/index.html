@@ -43,11 +43,13 @@
     <body>
         <div data-role="page" id="settings">
             <header data-role="header" id="settingsHeader">
-                <h1 data-l10n-id="app_title"></h1>
+                <h1>LibriFox</h1> <!-- TODO ERROR USING STRING FROM FILE - KEEPS RESETTING HEADER! !-->
                 <a href="settings.html" data-icon="gear" data-iconpos="notext"></a>
             </header>
-        <form id="newSearch"><input type="search" placeholder="Enter a written work" name="search-mini" id="search" data-mini="true" /></form>
-            <ul id="listView" data-role="listview"></ul>
+            <div data-role="content" id="ulListView">
+                <form id="newSearch"><input type="search" placeholder="Enter a written work" name="search-mini" id="search" data-mini="true" /></form>
+                <ul id="list" data-role="listview" data-inset="true"></ul>
+            </div>
         </div>
     </body>
 </html>

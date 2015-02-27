@@ -48,34 +48,36 @@ window.addEventListener('DOMContentLoaded', function() {
   }
 // TODO Check how to save localStorage
   // An error typically occurs if a file with the same name already exists
-  
-  $("#test_button").click(function() {
-    getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json"); // test url
-  });
   $("#volumeSlider").change(function(){
     // Set volume variable in settings
     writeToSettings("volume", $("#volumeSlider").slider("value").val());
   });
-
   $("#newSearch").submit(function(){
     var input = encodeURIComponent( $("#search").val() );
     // URL Works, Input Works - getJSON returns null response
     var url = ("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json");
     //<-- Input would be searched via JSON, see website for details -->
     // Input now works
-    console.log(getJSON(url).response);
-    var json = getJSON(url).response;
-    json.books.forEach(function(entry){
-      $("#listView").append(entry.title);
-      $("#listView").listView('refresh');
-      
-      // Add object to Linked ListView (see JQuery Mobile)
-      // For each object, change link to book
-      // onClick -> go to book.html, which has play buttons, etc. together
+    var json = getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json",function(xhr) {
+      console.log(xhr); // this works :)
+      // onLoad Callback... display results!
+      console.log(xhr.response);
+      console.log(xhr.response.books);
+      $("#list").trigger("create"); // Initialize the list?
+      xhr.response.books.forEach(function(entry){
+        var listItem = '<li>' + entry.title + '</li>';
+        console.log("listItem " + listItem);
+        $("#list").append(listItem);
+        console.log("Appended " + '<li>' + entry.title + '</li>' + " to list"); // It appended... but it didn't show. Refresh doesn't work.
+        // Add object to Linked ListView (see JQuery Mobile) -- DONE... but list isn't refreshing :(
+        // For each object, change link to book -- ALMOST? Just an A tag with HREF
+        // onClick -> go to book.html, which has play buttons, etc. together, load audiobook
+      });
+      $("#list").listview();
+      $("#list").listview('refresh');
     });
   });
-
-function getJSON(url) {
+function getJSON(url, load_callback) {
   var xhr = new XMLHttpRequest({ mozSystem: true });
   if (xhr.overrideMimeType) {
     xhr.overrideMimeType('application/json');
@@ -86,16 +88,12 @@ function getJSON(url) {
     console.log(e);
   }
   xhr.addEventListener('load', function(e) {
-    //console.log("json successfully loaded from " + url);
-    //console.log(xhr.response);
+    load_callback(xhr,e);
   });
 
   xhr.addEventListener('error', callback);
   xhr.addEventListener('timeout', callback);
   xhr.open('GET', url);
-  
   xhr.responseType = 'json';
   xhr.send();
-
-  return xhr;
 }
