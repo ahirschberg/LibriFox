@@ -26,8 +26,6 @@ window.addEventListener('DOMContentLoaded', function() {
 
   }*/
 });
-  var newSearch = document.getElementById('newSearch');
-  var search = document.getElementById('search');
   var volumeAmt = getValue("volume");
   
   // -- Save Settings File (if nonexistent)  
@@ -50,37 +48,41 @@ window.addEventListener('DOMContentLoaded', function() {
   }
 // TODO Check how to save localStorage
   // An error typically occurs if a file with the same name already exists
+  
+  $("#test_button").click(function() {
+    getJSON("https://librivox.org/api/feed/audiobooks/?id=53&format=json"); // test url
+  });
   $("#volumeSlider").change(function(){
-    writeToSettings("volume", $("#volumeSlider").slider("value").val());
+    // Set volume variable in settings
   })
   $("#newSearch").submit(function(){
-    var input = encodeURIComponent($("#search").val());
+    var input = encodeURIComponent( $("#search").val() );
     //<-- Input would be searched via JSON, see website for details -->
     // Input now works
     getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json");
   });
 
-  function getJSON(url) {
-    var xhr = new XMLHttpRequest({ mozSystem: true });
-    if (xhr.overrideMimeType) {
-      xhr.overrideMimeType('application/json');
-    }
-
-    var callback = function(e) {
-      console.log("error loading json from url " + url);
-      console.log(e);
-    }
-    xhr.addEventListener('load', function(e) {
-      console.log("json successfully loaded from " + url);
-      console.log(xhr.response);
-    });
-
-    xhr.addEventListener('error', callback);
-    xhr.addEventListener('timeout', callback);
-    xhr.open('GET', url);
-
-    xhr.responseType = 'json';
-    xhr.send();
-    
-    return xhr;
+function getJSON(url) {
+  var xhr = new XMLHttpRequest({ mozSystem: true });
+  if (xhr.overrideMimeType) {
+    xhr.overrideMimeType('application/json');
   }
+
+  var callback = function(e) {
+    console.log("error loading json from url " + url);
+    console.log(e);
+  }
+  xhr.addEventListener('load', function(e) {
+    //console.log("json successfully loaded from " + url);
+    //console.log(xhr.response);
+  });
+
+  xhr.addEventListener('error', callback);
+  xhr.addEventListener('timeout', callback);
+  xhr.open('GET', url);
+
+  xhr.responseType = 'json';
+  xhr.send();
+
+  return xhr;
+}
