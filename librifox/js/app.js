@@ -32,21 +32,21 @@ window.addEventListener('DOMContentLoaded', function() {
   
   // -- Save Settings File (if nonexistent)  
   function writeToSettings(key, value){
-    if(window.localStorage){
+//    if(window.localStorage){
       localStorage.setItem(key, value);
-    }
+//    }
   }
   function getValue(key){
-    if(window.localStorage){
+//    if(window.localStorage){
       localStorage.getItem(key);
     }
-  }
+//  }
   function checkSettings(){
-    if(window.localStorage){
-  //    if((getValue("volume") == null) || (getValue("volume") == 'undefined')){
-  //      writeToSettings("volume", "60");  // -> Fix: Volume is just resetting every app restart
-  //    }
-    }
+//    if(window.localStorage){
+      if((getValue("volume") == null) || (getValue("volume") == 'undefined')){
+        writeToSettings("volume", "60");  // -> Fix: Volume is just resetting every app restart
+      }
+//    }
   }
 // TODO Check how to save localStorage
   // An error typically occurs if a file with the same name already exists
