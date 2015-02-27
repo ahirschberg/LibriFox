@@ -52,12 +52,20 @@ window.addEventListener('DOMContentLoaded', function() {
   // An error typically occurs if a file with the same name already exists
   $("#volumeSlider").change(function(){
     writeToSettings("volume", $("#volumeSlider").slider("value").val());
-  })
+  });
   $("#newSearch").submit(function(){
     var input = encodeURIComponent($("#search").val());
     //<-- Input would be searched via JSON, see website for details -->
     // Input now works
-    getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json");
+    var json = getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json").response;
+    json.books.forEach(function(entry){
+      $("#listView").append(entry.title);
+      $("#listView").listView('refresh');
+      
+      // Add object to Linked ListView (see JQuery Mobile)
+      // For each object, change link to book
+      // onClick -> go to book.html, which has play buttons, etc. together
+    });
   });
 
   function getJSON(url) {
