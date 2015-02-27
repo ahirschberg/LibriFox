@@ -58,11 +58,10 @@ window.addEventListener('DOMContentLoaded', function() {
     // Set volume variable in settings
   })
   $("#newSearch").submit(function(){
-    var input = $("#search").val();
+    var input = encodeURIComponent($("#search").val());
     //<-- Input would be searched via JSON, see website for details -->
-    getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "&format=json");
-    console.log(input);
-    console.log(volumeAmt);
+    // Input now works
+    getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json");
   });
 
   function getJSON(url) {
