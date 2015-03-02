@@ -26,7 +26,6 @@ window.addEventListener('DOMContentLoaded', function() {
 
   }*/
 });
-
 var volumeAmt = getValue("volume");
 
 // -- Save Settings File (if nonexistent)  
