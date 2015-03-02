@@ -27,80 +27,62 @@ window.addEventListener('DOMContentLoaded', function() {
   }*/
 });
 
+var volumeAmt = getValue("volume");
 
-// BIG ERROR! As soon as a request is made, ALL lists reset. It's almost as if the page is refreshing. This is our issue!
-
-
-// -- THE FOLLOWING CODE IS AN EXAMPLE TO SHOW THAT LISTS DO NOT WORK PROPERLY --
-
-$('#addTestText').click(function() {
-    var newAmount = $('#testText').val();
-
-    if(newAmount != '') {
-      $('#booksList').append('<li><a>' + newAmount + '</a></li>').listview('refresh');
-      $('#testText').val('');
-    } else {
-        alert('Nothing to add');   
-    }
+// -- Save Settings File (if nonexistent)  
+function writeToSettings(key, value){
+  //    if(window.localStorage){
+  localStorage.setItem(key, value);
+  //    }
+}
+function getValue(key){
+  //    if(window.localStorage){
+  localStorage.getItem(key);
+}
+//  }
+function checkSettings(){
+  //    if(window.localStorage){
+  if((getValue("volume") == null) || (getValue("volume") == 'undefined')){
+    writeToSettings("volume", "60");  // -> Fix: Volume is just resetting every app restart
+  }
+  //    }
+}
+// TODO Check how to save localStorage
+$("#volumeSlider").change(function(){
+  // Set volume variable in settings
+  writeToSettings("volume", $("#volumeSlider").slider("value").val());
 });
 
-// -- END TEST CODE --
 
-  var volumeAmt = getValue("volume");
+$("#newSearch").submit(function(event){
+  $("#booksList").empty(); // empty the list of any results from previous searches
   
-  // -- Save Settings File (if nonexistent)  
-  function writeToSettings(key, value){
-//    if(window.localStorage){
-      localStorage.setItem(key, value);
-//    }
-  }
-  function getValue(key){
-//    if(window.localStorage){
-      localStorage.getItem(key);
-    }
-//  }
-  function checkSettings(){
-//    if(window.localStorage){
-      if((getValue("volume") == null) || (getValue("volume") == 'undefined')){
-        writeToSettings("volume", "60");  // -> Fix: Volume is just resetting every app restart
+  var input = $("#bookSearch").val();  
+  getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
+    console.log("librivox responded with " + xhr.response.books.length + " book(s) and status " + xhr.status);
+    xhr.response.books.forEach(function(entry){
+      var title = entry.title;
+      if(title != ''){
+        $("#booksList").append('<li><a>' + title + '</a></li>');
       }
-//    }
-  }
-// TODO Check how to save localStorage
-  $("#volumeSlider").change(function(){
-    // Set volume variable in settings
-    writeToSettings("volume", $("#volumeSlider").slider("value").val());
-  });
-  $("#newSearch").submit(function(){
-    var input = encodeURIComponent( $("#bookSearch").val() );
-    var url = ("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json");
-    var json = getJSON("https://librivox.org/api/feed/audiobooks/title/^" + input + "?&format=json",function(xhr) {
-      console.log(xhr); // this works :)
-      // onLoad Callback... display results!
-      console.log(xhr.response);
-      console.log(xhr.response.books);
-      xhr.response.books.forEach(function(entry){
-        var title = entry.title;
-       // var value = title.val();
-        if(title != ''){
-          $("#booksList").append('<li><a>' + title + '</a></li>').listview('refresh');  // EVEN NO REFRESH WILL RESET ITEMS!
-        }
-        else {
-          console.log("Nothing to add!");
-        } // It appended... but it didn't show. Refresh doesn't work.
-        // Add object to Linked ListView (see JQuery Mobile) -- DONE... but list isn't refreshing :(
-        // For each object, change link to book -- ALMOST? Just an A tag with HREF
-        // onClick -> go to book.html, which has play buttons, etc. together, load audiobook
-      });
+      else {
+        console.log("Nothing to add!");
+      }
+      // For each object, change link to book -- ALMOST? Just an A tag with HREF
+      // onClick -> go to book.html, which has play buttons, etc. together, load audiobook
     });
+    $("#booksList").listview('refresh');
   });
+  return false; // this cancels the form submit, which stops the page from refreshing.
+});
+
 function getJSON(url, load_callback) {
   var xhr = new XMLHttpRequest({ mozSystem: true });
   if (xhr.overrideMimeType) {
     xhr.overrideMimeType('application/json');
   }
 
-  var callback = function(e) {
+  var error_callback = function(e) {
     console.log("error loading json from url " + url);
     console.log(e);
   }
@@ -108,8 +90,8 @@ function getJSON(url, load_callback) {
     load_callback(xhr,e);
   });
 
-  xhr.addEventListener('error', callback);
-  xhr.addEventListener('timeout', callback);
+  xhr.addEventListener('error', error_callback);
+  xhr.addEventListener('timeout', error_callback);
   xhr.open('GET', url);
   xhr.responseType = 'json';
   xhr.send();
