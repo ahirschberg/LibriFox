@@ -62,12 +62,13 @@ $("#newSearch").submit(function(event){
     console.log("librivox responded with " + xhr.response.books.length + " book(s) and status " + xhr.status);
     xhr.response.books.forEach(function(entry){
       var title = entry.title;
+      var id = entry.id;
       var description = entry.description;
       var text = $.parseHTML(description);
       var realText = $(text).text();
       var id = entry.id;
       if(title != ''){
-        $("#booksList").append('<li><a><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
+        $("#booksList").append('<li><a href="book.html?id="' + id + '><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
       }
       else {
         console.log("Nothing to add!");
