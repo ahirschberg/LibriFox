@@ -62,8 +62,12 @@ $("#newSearch").submit(function(event){
     console.log("librivox responded with " + xhr.response.books.length + " book(s) and status " + xhr.status);
     xhr.response.books.forEach(function(entry){
       var title = entry.title;
+      var description = entry.description;
+      var text = $.parseHTML(description);
+      var realText = $(text).text();
+      var id = entry.id;
       if(title != ''){
-        $("#booksList").append('<li><a>' + title + '</a></li>');
+        $("#booksList").append('<li><a><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
       }
       else {
         console.log("Nothing to add!");
@@ -74,6 +78,7 @@ $("#newSearch").submit(function(event){
     $("#booksList").listview('refresh');
   });
   return false; // this cancels the form submit, which stops the page from refreshing.
+  // Awesome... I wish I had thought of that earlier :p -> Now changing search results into links which will then load the audiobook
 });
 
 function getJSON(url, load_callback) {
