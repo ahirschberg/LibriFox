@@ -42,7 +42,10 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
   getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
     console.log("Loaded book info.");
     var book = xhr.response.books[0];
+    var timesecs = xhr.response.books[0].totaltimesecs;
+    var time = xhr.response.books[0].totaltime;
     console.log("Title is: " + xhr.response.books[0].title);
+    console.log("Time was " + time + " or " + timesecs + " seconds");
   });
 });
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
