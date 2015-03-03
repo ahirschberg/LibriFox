@@ -37,6 +37,12 @@ window.addEventListener('DOMContentLoaded', function() {
 $( document ).on( "pagecreate", "#homeBook", function( event ) {
   // TODO: Load the ID of the book
   console.log("Book.html loaded");
+  var id = localStorage.getItem("id");
+  console.log("Book ID determined to be " + id);
+  getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id), function(xhr){
+    console.log("Loaded book info.");
+    console.log("Title is: " + xhr.response.books[0].title);
+  });
 });
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
   console.log("Settings.html loaded");
@@ -45,27 +51,18 @@ $( document ).on( "pagecreate", "#mainIndex", function( event ) {
 //  $("#booksList").empty();
   console.log("Index.html loaded");
 });
-var volumeAmt = getValue("volume");
 // -- Save Settings File (if nonexistent)  
 function writeToSettings(key, value){
   //    if(window.localStorage){
   localStorage.setItem(key, value);
   //    }
 }
-function getValue(key){
-  //    if(window.localStorage){
-  localStorage.getItem(key);
-}
-function loadBook(){
-  var id = getValue("id");
-  console.log("ID was determined to be " + id);
-}
 //  }
 function checkSettings(){
   //    if(window.localStorage){
-  if((getValue("volume") == null) || (getValue("volume") == 'undefined')){
-    writeToSettings("volume", "60");  // -> Fix: Volume is just resetting every app restart
-  }
+  //if((getValue("volume") == null) || (getValue("volume") == 'undefined')){
+  //  writeToSettings("volume", "60");  // -> Fix: Volume is just resetting every app restart
+ // }
   //    }
 }
 $("#volumeSlider").change(function(){
