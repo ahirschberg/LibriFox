@@ -46,6 +46,16 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
     var time = xhr.response.books[0].totaltime;
     console.log("Title is: " + xhr.response.books[0].title);
     console.log("Time was " + time + " or " + timesecs + " seconds");
+    $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
+  //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
+ //   $("#audioTime").slider("option", "0", timesecs);
+  });
+  $("#audioTime").on("change", function(){
+    var currTimeSeconds = $("#audioTime").val();
+    var timeFormatted = intToTime(currTimeSeconds);
+    console.log("Timeformatted " + timeFormatted);
+    $("#audioSlider .labelTime").val(timeFormatted);
+    $("#audioSlider .ui-slider-handle").prop("title", timeFormatted);
   });
 });
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
@@ -55,6 +65,14 @@ $( document ).on( "pagecreate", "#mainIndex", function( event ) {
 //  $("#booksList").empty();
   console.log("Index.html loaded");
 });
+// Various used functions
+function intToTime(seconds) {
+    var h = Math.floor(seconds / 3600);
+    seconds -= h * 3600;
+    var m = Math.floor(seconds / 60);
+    seconds -= m * 60;
+    return h+ ":" +(m < 10 ? '0'+m : m) + ":" + (seconds < 10 ? '0'+seconds : seconds);
+}
 // -- Save Settings File (if nonexistent)  
 function writeToSettings(key, value){
   //    if(window.localStorage){
