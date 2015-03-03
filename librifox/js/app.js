@@ -30,6 +30,13 @@ window.addEventListener('DOMContentLoaded', function() {
 // TODO Get JS to recognize multiple HTML pages
 // Once this is fixed, playing books + settings should work!
 
+// Bugs:
+//    -Not loading when spaces are used
+//    -Not working with multiple pages
+//    -Search results aren't resetting
+$( document ).on( "pagecreate", "#homeBook", function( event ) {
+  // TODO: Load the ID of the book
+});
 var volumeAmt = getValue("volume");
 $("#play").bind("show", function(){
   console.log("Book loaded: " + document.URL);
