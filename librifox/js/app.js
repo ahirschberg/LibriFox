@@ -68,7 +68,6 @@ $("#volumeSlider").change(function(){
   writeToSettings("volume", $("#volumeSlider").slider("value").val());
 });
 
-
 $("#newSearch").submit(function(event){
   $("#booksList").empty(); // empty the list of any results from previous searches
   var input = $("#bookSearch").val();  
@@ -87,9 +86,12 @@ $("#newSearch").submit(function(event){
           var realText = $(text).text();
           var id = entry.id;
           if(title != ''){
-            localStorage.setItem("id", id);
-            $("#booksList").append('<li><a href="book.html?id=' + id + '"><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
-            // Keeping ID in URL for possible use later
+            bookListItem = $('<li book-id=' + id + '><a href="book.html"><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
+            bookListItem.click(function(){
+              book_id = $(this).attr("book-id");
+              localStorage.setItem("id", book_id);
+            });
+            $("#booksList").append(bookListItem);
           }
           else {
             console.log("Nothing to add!");
