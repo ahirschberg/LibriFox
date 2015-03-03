@@ -39,8 +39,9 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
   console.log("Book.html loaded");
   var id = localStorage.getItem("id");
   console.log("Book ID determined to be " + id);
-  getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id), function(xhr){
+  getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
     console.log("Loaded book info.");
+    var book = xhr.response.books[0];
     console.log("Title is: " + xhr.response.books[0].title);
   });
 });
