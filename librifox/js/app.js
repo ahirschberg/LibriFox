@@ -36,12 +36,12 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Search results aren't resetting
 $( document ).on( "pagecreate", "#homeBook", function( event ) {
   // TODO: Load the ID of the book
+  console.log("Book.html loaded");
+});
+$( document ).on( "pagecreate", "#homeSettings", function( event ) {
+  console.log("Settings.html loaded");
 });
 var volumeAmt = getValue("volume");
-$("#play").bind("show", function(){
-  console.log("Book loaded: " + document.URL);
-  loadBook();
-});
 // -- Save Settings File (if nonexistent)  
 function writeToSettings(key, value){
   //    if(window.localStorage){
