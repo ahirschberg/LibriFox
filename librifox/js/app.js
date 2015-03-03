@@ -41,6 +41,10 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
   console.log("Settings.html loaded");
 });
+$( document ).on( "pagecreate", "#mainIndex", function( event ) {
+//  $("#booksList").empty();
+  console.log("Index.html loaded");
+});
 var volumeAmt = getValue("volume");
 // -- Save Settings File (if nonexistent)  
 function writeToSettings(key, value){
