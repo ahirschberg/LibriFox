@@ -27,7 +27,10 @@ window.addEventListener('DOMContentLoaded', function() {
   }*/
 });
 var volumeAmt = getValue("volume");
-
+$("#play").bind("show", function(){
+  console.log("Book loaded: " + document.URL);
+  loadBook();
+});
 // -- Save Settings File (if nonexistent)  
 function writeToSettings(key, value){
   //    if(window.localStorage){
@@ -37,6 +40,10 @@ function writeToSettings(key, value){
 function getValue(key){
   //    if(window.localStorage){
   localStorage.getItem(key);
+}
+function loadBook(){
+  var id = getValue("id");
+  console.log("ID was determined to be " + id);
 }
 //  }
 function checkSettings(){
@@ -55,26 +62,32 @@ $("#volumeSlider").change(function(){
 
 $("#newSearch").submit(function(event){
   $("#booksList").empty(); // empty the list of any results from previous searches
-  
   var input = $("#bookSearch").val();  
   getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
-    console.log("librivox responded with " + xhr.response.books.length + " book(s) and status " + xhr.status);
-    xhr.response.books.forEach(function(entry){
-      var title = entry.title;
-      var id = entry.id;
-      var description = entry.description;
-      var text = $.parseHTML(description);
-      var realText = $(text).text();
-      var id = entry.id;
-      if(title != ''){
-        $("#booksList").append('<li><a href="book.html?id="' + id + '><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
-      }
-      else {
-        console.log("Nothing to add!");
-      }
-      // For each object, change link to book -- ALMOST? Just an A tag with HREF
-      // onClick -> go to book.html, which has play buttons, etc. together, load audiobook
-    });
+    if(typeof (xhr.response.books) === 'undefined'){
+      // Show "No Available Books" text! Try making your search simpler.
+      $("#noAvailableBooks").show();
+    }
+    else {
+      console.log("librivox responded with " + xhr.response.books.length + " book(s) and status " + xhr.status);
+        xhr.response.books.forEach(function(entry){
+          var title = entry.title;
+          var id = entry.id;
+          var description = entry.description;
+          var text = $.parseHTML(description);
+          var realText = $(text).text();
+          var id = entry.id;
+          if(title != ''){
+            localStorage.setItem("id", id);
+            $("#booksList").append('<li><a href="book.html?id=' + id + '"><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
+            // Keeping ID in URL for possible use later
+          }
+          else {
+            console.log("Nothing to add!");
+          }
+          // onClick -> go to book.html, which has play buttons, etc. together, load audiobook
+        });
+    }
     $("#booksList").listview('refresh');
   });
   return false; // this cancels the form submit, which stops the page from refreshing.
