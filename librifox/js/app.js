@@ -34,31 +34,35 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Not loading when spaces are used
 //    -Not working with multiple pages
 //    -Search results aren't resetting
-var _title;
 $( document ).on( "pagecreate", "#homeBook", function( event ) {
   // TODO: Load the ID of the book
-  console.log("Book.html loaded");
   var id = localStorage.getItem("id");
-  console.log("Book ID determined to be " + id);
   getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
-    console.log("Loaded book info.");
     var book = xhr.response.books[0];
     var timesecs = xhr.response.books[0].totaltimesecs;
     var time = xhr.response.books[0].totaltime;
-    console.log("Title is: " + xhr.response.books[0].title);
-    console.log("Time was " + time + " or " + timesecs + " seconds");
     $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
     // -- Initialize Get RSS --
     getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr){
-      console.log("Successfully loaded XML");
       var xml = xhr.response;
       var xmlDoc = $.parseXML( xml );
       var newXML = $( xmlDoc );
-      var title = newXML.find( "title" ); // Title.text() returns a list of all titles' text
-      _title = title;
+      var title = newXML.find( "title" );
+      var enclosure = newXML.find("enclosure");
+      var currTitle;
+      var currEnclosure;
+      $.each(title, function(index){
+        currTitle = title[index].innerHTML;
+        // Replace unnecessary CDATA characters
+        currTitle = currTitle.replace("<![CDATA[", "").replace("]]>", ""); // currTitle is now properly formatted
+      });
+      $.each(enclosure, function(index){
+        currEnclosure = enclosure[index];
+        var url = $(currEnclosure).attr("url"); // <- Gets the URL. TODO: ListView of all chapters with URLs
+      });
       // Title is an array. It can be accessed via title[0], where 0 is the first chapters' name.
       // Each sound file can be accessed in a similar way, using the tag enclosure. The URL is included in this tag.
-      
+      // Note: These are taking a long time (~12-15secs) to complete. We should find a better way of storing these URLs - maybe a database?
     });
     
   //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
@@ -67,17 +71,16 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
   $("#audioTime").on("change", function(){
     var currTimeSeconds = $("#audioTime").val();
     var timeFormatted = intToTime(currTimeSeconds);
-    console.log("Timeformatted " + timeFormatted);
     $("#audioSlider .labelTime").val(timeFormatted);
     $("#audioSlider .ui-slider-handle").prop("title", timeFormatted);
   });
 });
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
-  console.log("Settings.html loaded");
+  // Settings.html Loaded
 });
 $( document ).on( "pagecreate", "#mainIndex", function( event ) {
 //  $("#booksList").empty();
-  console.log("Index.html loaded");
+  // Index.html Loaded
 });
 // Various used functions
 function intToTime(seconds) {
@@ -133,13 +136,11 @@ $("#newSearch").submit(function(event){
           else {
             console.log("Nothing to add!");
           }
-          // onClick -> go to book.html, which has play buttons, etc. together, load audiobook
         });
     }
     $("#booksList").listview('refresh');
   });
-  return false; // this cancels the form submit, which stops the page from refreshing.
-  // Awesome... I wish I had thought of that earlier :p -> Now changing search results into links which will then load the audiobook
+  return false;
 });
 
 function getJSON(url, load_callback) {
