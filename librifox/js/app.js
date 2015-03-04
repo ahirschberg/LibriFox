@@ -34,6 +34,7 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Not loading when spaces are used
 //    -Not working with multiple pages
 //    -Search results aren't resetting
+var _title;
 $( document ).on( "pagecreate", "#homeBook", function( event ) {
   // TODO: Load the ID of the book
   console.log("Book.html loaded");
@@ -53,11 +54,10 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
       var xml = xhr.response;
       var xmlDoc = $.parseXML( xml );
       var newXML = $( xmlDoc );
-      var title = newXML.find( "title" );
-      console.log(title.text());
-   //   title.forEach(function(newTitle){
-   //      console.log(newTitle + " is the returned title");
-   //   });
+      var title = newXML.find( "title" ); // Title.text() returns a list of all titles' text
+      _title = title;
+      // Title is an array. It can be accessed via title[0], where 0 is the first chapters' name.
+      // Each sound file can be accessed in a similar way, using the tag enclosure. The URL is included in this tag.
       
     });
     
