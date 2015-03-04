@@ -34,7 +34,7 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Not loading when spaces are used
 //    -Not working with multiple pages
 //    -Search results aren't resetting
-$( document ).on( "pagecreate", "#homeBook", function( event ) {
+$( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   // TODO: Load the ID of the book
   var id = localStorage.getItem("id");
   getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
@@ -54,12 +54,17 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
       $.each(title, function(index){
         currTitle = title[index].innerHTML;
         // Replace unnecessary CDATA characters
-        currTitle = currTitle.replace("<![CDATA[", "").replace("]]>", ""); // currTitle is now properly formatted
+        currTitle = currTitle.replace("<![CDATA[", "").replace("]]>", "");
+        var chapterItem = $('<li chapter-id=' + index + '><a href="book.html"><h2>' + currTitle + '</h2></a></li>');
+        chapterItem.click(function(){
+              chapter_index = $(this).attr("chapter-id");
+              localStorage.setItem("index", chapter_index);
+          console.log("Stored index as " + chapter_index);
+        });
+        $("#chaptersList").append(chapterItem);
+        
       });
-      $.each(enclosure, function(index){
-        currEnclosure = enclosure[index];
-        var url = $(currEnclosure).attr("url"); // <- Gets the URL. TODO: ListView of all chapters with URLs
-      });
+      $("#chaptersList").listview('refresh');
       // Title is an array. It can be accessed via title[0], where 0 is the first chapters' name.
       // Each sound file can be accessed in a similar way, using the tag enclosure. The URL is included in this tag.
       // Note: These are taking a long time (~12-15secs) to complete. We should find a better way of storing these URLs - maybe a database?
@@ -68,12 +73,42 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
   //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
  //   $("#audioTime").slider("option", "0", timesecs);
   });
+});
+$( document ).on( "pagecreate", "#homeBook", function( event ){
+  var currIndex = localStorage.getItem("index");
+  var id = localStorage.getItem("id");
+    getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
+      var book = xhr.response.books[0];
+      var timesecs = xhr.response.books[0].totaltimesecs;
+      var time = xhr.response.books[0].totaltime;
+      $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
+      // -- Initialize Get RSS --
+      getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr){
+      var xml = xhr.response;
+      var xmlDoc = $.parseXML( xml );
+      var newXML = $( xmlDoc );
+      var title = newXML.find( "title" ); // This is the "official" chapter title
+        var bookTitle = localStorage.getItem("title");
+      var enclosure = newXML.find("enclosure");
+      var currTitle = title[currIndex].innerHTML.replace("<![CDATA[", "").replace("]]>", "");
+      var currEnclosure = enclosure[currIndex];
+      var url = $(currEnclosure).attr("url");// We no longer need to loop through enclosures or the index, we have that now!
+        console.log("You are trying to read " + bookTitle + ": " + currTitle + " on chapter " + currIndex + " with URL " + url);
+      // Title is an array. It can be accessed via title[0], where 0 is the first chapters' name.
+      // Each sound file can be accessed in a similar way, using the tag enclosure. The URL is included in this tag.
+      // Note: These are taking a long time (~12-15secs) to complete. We should find a better way of storing these URLs - maybe a database?
+    });
+      
   $("#audioTime").on("change", function(){
     var currTimeSeconds = $("#audioTime").val();
     var timeFormatted = intToTime(currTimeSeconds);
     $("#audioSlider .labelTime").val(timeFormatted);
     $("#audioSlider .ui-slider-handle").prop("title", timeFormatted);
   });
+});
+    
+  //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
+ //   $("#audioTime").slider("option", "0", timesecs);
 });
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
   // Settings.html Loaded
@@ -126,10 +161,11 @@ $("#newSearch").submit(function(event){
           var realText = $(text).text();
           var id = entry.id;
           if(title != ''){
-            bookListItem = $('<li book-id=' + id + '><a href="book.html"><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
+            bookListItem = $('<li book-id=' + id + '><a href="chapters.html"><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
             bookListItem.click(function(){
               book_id = $(this).attr("book-id");
               localStorage.setItem("id", book_id);
+              localStorage.setItem("title", title);
             });
             $("#booksList").append(bookListItem);
           }
