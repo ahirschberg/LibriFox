@@ -47,6 +47,17 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
     console.log("Title is: " + xhr.response.books[0].title);
     console.log("Time was " + time + " or " + timesecs + " seconds");
     $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
+    // -- Initialize Get RSS --
+    getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr){
+      console.log("Successfully loaded XML");
+      var xml = xhr.response,
+          xmlDoc = $.parseXML( xml ),
+          $xml = $( xmlDoc ),
+          $title = $xml.find( "title" );
+      
+      
+    });
+    
   //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
  //   $("#audioTime").slider("option", "0", timesecs);
   });
@@ -146,5 +157,25 @@ function getJSON(url, load_callback) {
   xhr.addEventListener('timeout', error_callback);
   xhr.open('GET', url);
   xhr.responseType = 'json';
+  xhr.send();
+}
+function getXML(url, load_callback){
+  var xhr = new XMLHttpRequest({ mozSystem: true });
+  if (xhr.overrideMimeType) {
+   // xhr.overrideMimeType('application/json');
+  }
+
+  var error_callback = function(e) {
+    console.log("error loading json from url " + url);
+    console.log(e);
+  }
+  xhr.addEventListener('load', function(e) {
+    load_callback(xhr,e);
+  });
+
+  xhr.addEventListener('error', error_callback);
+  xhr.addEventListener('timeout', error_callback);
+  xhr.open('GET', url);
+  xhr.responseType = 'xml';
   xhr.send();
 }
