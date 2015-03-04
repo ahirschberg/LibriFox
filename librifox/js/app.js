@@ -50,11 +50,14 @@ $( document ).on( "pagecreate", "#homeBook", function( event ) {
     // -- Initialize Get RSS --
     getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr){
       console.log("Successfully loaded XML");
-      var xml = xhr.response,
-          xmlDoc = $.parseXML( xml ),
-          $xml = $( xmlDoc ),
-          $title = $xml.find( "title" );
-      
+      var xml = xhr.response;
+      var xmlDoc = $.parseXML( xml );
+      var newXML = $( xmlDoc );
+      var title = newXML.find( "title" );
+      console.log(title.text());
+   //   title.forEach(function(newTitle){
+   //      console.log(newTitle + " is the returned title");
+   //   });
       
     });
     
