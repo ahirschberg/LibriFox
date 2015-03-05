@@ -131,11 +131,12 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
   var hours = localStorage.getItem("hours");
   var minutes = localStorage.getItem("minutes");
   var seconds = localStorage.getItem("seconds");
-  var fullSeconds = (hours * 3600) + (minutes * 60) + seconds;
-  console.log(floatSeconds <= 5);
+  console.log(hours + ":" + minutes + ":" + seconds);
+  var fullSeconds = (hours * 3600) + (minutes * 60) + seconds; // Don't know why, but this is giving a HUGE number. See console
+  console.log(floatSeconds <= 5);                              // If it can be fixed, audio should be fine
   console.log(fullSeconds + " and " + (fullSeconds >= 5));
   if((floatSeconds <= 5) && (fullSeconds >= 5)){
-    $("#audioSource").prop('currentTime', fullSeconds); // CurrentTime was set
+    $("#audioSource").prop('currentTime', fullSeconds); // reset currentTime
     console.log("Should have set current time to " + fullSeconds);
   }
   else {
