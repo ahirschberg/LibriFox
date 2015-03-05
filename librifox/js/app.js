@@ -109,8 +109,7 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
           var seconds = +localStorage.getItem("seconds");
           var hours = +localStorage.getItem("hours");
           console.log("Loading your current place in the book at " + hours +  "hours, " + minutes + "minutes, " + seconds + "seconds");
-          var newSeconds = seconds + (minutes * 60) + (hours * 3600); //timeToInt(hours, minutes, seconds)
-          console.log("Newseconds is " + newSeconds);
+          var newSeconds = seconds + (minutes * 60) + (hours * 3600);
           currTime = newSeconds;
         }
         $("#audioSource").prop('type', "audio/mpeg");
@@ -132,12 +131,11 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
   var minutes = +localStorage.getItem("minutes");
   var seconds = +localStorage.getItem("seconds");
   console.log(hours + ":" + minutes + ":" + seconds);
-  var fullSeconds = (hours * 3600) + (minutes * 60) + seconds; // Don't know why, but this is giving a HUGE number. See console
-  console.log(floatSeconds <= 5);                              // If it can be fixed, audio should be fine
+  var fullSeconds = (hours * 3600) + (minutes * 60) + seconds;
+  console.log(floatSeconds <= 5);
   console.log(fullSeconds + " and " + (fullSeconds >= 5));
   if((floatSeconds <= 5) && (fullSeconds >= 5)){
-    $("#audioSource").prop('currentTime', fullSeconds); // reset currentTime
-    console.log("Should have set current time to " + fullSeconds);
+    $("#audioSource").prop('currentTime', fullSeconds);
   }
   else {
     var intSeconds = Math.floor(floatSeconds);
@@ -146,7 +144,6 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
     intSeconds -= hours * 3600;
     var minutes = Math.floor(intSeconds / 60);
     intSeconds -= minutes * 60;
-    console.log("we are now left with hours " + hours + " minutes " + minutes + " seconds " + intSeconds);
     localStorage.setItem("hours", hours);
     localStorage.setItem("minutes", minutes);
     localStorage.setItem("seconds", intSeconds);
@@ -181,12 +178,6 @@ function intToTime(seconds) {
     var m = Math.floor(seconds / 60);
     seconds -= m * 60;
     return h+ ":" +(m < 10 ? '0'+m : m) + ":" + (seconds < 10 ? '0'+seconds : seconds);
-}
-function timeToInt(hours, minutes, seconds){
-  var newSeconds = 0;
-  newSeconds += (hours * 3600);
-  newSeconds += (minutes * 60);
-  newSeconds += seconds;
 }
 $("#play").click(function(){
   $("#audioSource").trigger('play');
