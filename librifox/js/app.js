@@ -9,7 +9,14 @@ window.addEventListener('DOMContentLoaded', function() {
   'use strict';
 
   var translate = navigator.mozL10n.get;
-  checkSettings();
+  var hasLoaded = localStorage.getItem("default");
+  if(hasLoaded == null || hasLoaded.boolean() != true){
+    localStorage.setItem("default", "true");
+  }
+  else {
+    // Load book
+    window.location = "book.html";
+  }
   // We want to wait until the localisations library has loaded all the strings.
   // So we'll tell it to let us know once it's ready.
   //navigator.mozL10n.once(start);
@@ -27,15 +34,12 @@ window.addEventListener('DOMContentLoaded', function() {
   }*/
 });
 
-// TODO Get JS to recognize multiple HTML pages
-// Once this is fixed, playing books + settings should work!
-
 // Bugs:
 //    -Not loading when spaces are used
 //    -Not working with multiple pages
 //    -Search results aren't resetting
+
 $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
-  // TODO: Load the ID of the book
   var id = localStorage.getItem("id");
   getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
     var book = xhr.response.books[0];
@@ -98,24 +102,44 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
       var url = $(currEnclosure).attr("url");// We no longer need to loop through enclosures or the index, we have that now!
         console.log("You are trying to read " + bookTitle + ": " + currTitle + " on chapter " + currIndex + " with URL " + url);
         console.log("Loading Audio!");
+        if(localStorage.getItem("url") != null){
+          console.log("Hey, you have already been here! Welcome back :)");
+          var minutes = localStorage.getItem("minutes");
+          var seconds = localStorage.getItem("seconds");
+          var hours = localStorage.getItem("hours");
+          console.log("Loading your current place in the book at " + hours +  "hours, " + minutes + "minutes, " + seconds + "seconds");
+        }
         $("#audioSource").prop('type', "audio/mpeg");
         $("#audioSource").prop("src", url);
         $("#audioSource").trigger('load');
-      // Title is an array. It can be accessed via title[0], where 0 is the first chapters' name.
-      // Each sound file can be accessed in a similar way, using the tag enclosure. The URL is included in this tag.
-      // Note: These are taking a long time (~12-15secs) to complete. We should find a better way of storing these URLs - maybe a database?
     });
       
-  $("#audioTime").on("change", function(){
-    var currTimeSeconds = $("#audioTime").val();
-    var timeFormatted = intToTime(currTimeSeconds);
-    $("#audioSlider .labelTime").val(timeFormatted);
-    $("#audioSlider .ui-slider-handle").prop("title", timeFormatted);
+    $("#audioTime").on("currentTime", function(){
+      var currTimeSeconds = $("#audioTime").val();
+      var timeFormatted = intToTime(currTimeSeconds);
+      $("#audioSlider .labelTime").val(timeFormatted);
+      $("#audioSlider .ui-slider-handle").prop("title", timeFormatted);
+    });
   });
-});
     
   //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
  //   $("#audioTime").slider("option", "0", timesecs);
+});
+$("#audioSource").on("timeupdate", function(){ // On audio change, save new time to localSettings
+  var floatSeconds = $("#audioSource").prop('currentTime');
+  var intSeconds = Math.floor(floatSeconds);
+  console.log("Floatseconds is currently " + floatSeconds);
+  var hours = Math.floor(intSeconds / 3600);
+  intSeconds -= hours * 3600;
+  var minutes = Math.floor(intSeconds / 60);
+  intSeconds -= minutes * 60;
+  console.log("we are now left with hours " + hours + " minutes " + minutes + " seconds " + intSeconds);
+  localStorage.setItem("hours", hours);
+  localStorage.setItem("minutes", minutes);
+  localStorage.setItem("seconds", seconds);
+//  var currTimeSeconds = $("#audioSource")
+//  var currTimeMinutes = $("#audioSource")
+//  var currTimeHours = $("#audioSource")
 });
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
   // Settings.html Loaded
@@ -124,27 +148,15 @@ $( document ).on( "pagecreate", "#mainIndex", function( event ) {
 //  $("#booksList").empty();
   // Index.html Loaded
 });
+
 // Various used functions
+
 function intToTime(seconds) {
     var h = Math.floor(seconds / 3600);
     seconds -= h * 3600;
     var m = Math.floor(seconds / 60);
     seconds -= m * 60;
     return h+ ":" +(m < 10 ? '0'+m : m) + ":" + (seconds < 10 ? '0'+seconds : seconds);
-}
-// -- Save Settings File (if nonexistent)  
-function writeToSettings(key, value){
-  //    if(window.localStorage){
-  localStorage.setItem(key, value);
-  //    }
-}
-//  }
-function checkSettings(){
-  //    if(window.localStorage){
-  //if((getValue("volume") == null) || (getValue("volume") == 'undefined')){
-  //  writeToSettings("volume", "60");  // -> Fix: Volume is just resetting every app restart
- // }
-  //    }
 }
 $("#play").click(function(){
   $("#audioSource").trigger('play');
@@ -182,6 +194,10 @@ $("#newSearch").submit(function(event){
               book_id = $(this).attr("book-id");
               localStorage.setItem("id", book_id);
               localStorage.setItem("title", title);
+              localStorage.setItem("url", "true");
+              localStorage.setItem("minutes", "0");
+              localStorage.setItem("seconds", "0");
+              localStorage.setItem("hours", "0");
             });
             $("#booksList").append(bookListItem);
           }
