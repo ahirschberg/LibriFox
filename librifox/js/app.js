@@ -10,13 +10,17 @@ window.addEventListener('DOMContentLoaded', function() {
 
   var translate = navigator.mozL10n.get;
   var hasLoaded = localStorage.getItem("default");
-  if(hasLoaded == null || hasLoaded.boolean() != true){
-    localStorage.setItem("default", "true");
+  if(Boolean(localStorage.getItem("default")) != true){
+    localStorage.setItem("default", "true"); // Set default settings
+    localStorage.setItem("directoryCreated", "false");
   }
-  else {
+//  if(hasLoaded == null || Boolean(hasLoaded) != true){
+//    localStorage.setItem("default", "true");
+//  }
+//  else {
     // Load book
-    window.location = "book.html";
-  }
+//    window.location = "book.html";
+//  }
   // We want to wait until the localisations library has loaded all the strings.
   // So we'll tell it to let us know once it's ready.
   //navigator.mozL10n.once(start);
@@ -78,6 +82,10 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
  //   $("#audioTime").slider("option", "0", timesecs);
   });
+});
+$("#download").click(function(){
+  downloadBook();
+  // Download URL to directory
 });
 $("#audioSource").bind("load", function(){
   console.log("Audio should have started playing by now.");
@@ -191,10 +199,20 @@ $("#stop").click(function(){
 $("#volumeSlider").change(function(){
   writeToSettings("volume", $("#volumeSlider").slider("value").val());
 });
-
+function downloadBook(){
+  var id = localStorage.getItem("id");
+  var URL = localStorage.getItem("download");
+  console.log("URL determined to be " + URL);
+  var sdcard = navigator.getDeviceStorage("sdcard");
+  if(Boolean(localStorage.getItem("directoryCreated")) === false){
+//    var download = $.get(URL);
+//    var blobType = "audio/mpeg3";
+    // finish getting file (jQuery?), unzip it, place it in the LibriFox/books directory
+  }
+}
 $("#newSearch").submit(function(event){
   $("#booksList").empty(); // empty the list of any results from previous searches
-  var input = $("#bookSearch").val();  
+  var input = $("#bookSearch").val();
   getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
     if(typeof (xhr.response.books) === 'undefined'){
       // Show "No Available Books" text! Try making your search simpler.
@@ -207,6 +225,7 @@ $("#newSearch").submit(function(event){
           var id = entry.id;
           var description = entry.description;
           var text = $.parseHTML(description);
+          var downloadURL = entry.url_zip_file;
           var realText = $(text).text();
           var id = entry.id;
           if(title != ''){
@@ -215,6 +234,7 @@ $("#newSearch").submit(function(event){
               book_id = $(this).attr("book-id");
               localStorage.setItem("id", book_id);
               localStorage.setItem("title", title);
+              localStorage.setItem("download", downloadURL);
               localStorage.setItem("url", "true");
               localStorage.setItem("minutes", "0");
               localStorage.setItem("seconds", "0");
