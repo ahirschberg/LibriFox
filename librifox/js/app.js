@@ -39,7 +39,7 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Not working with multiple pages
 //    -Search results aren't resetting
 
-var currTime = 0; // I don't like having this as a global variable. It works, but TODO: change to something else
+var currTime = 5; // I don't like having this as a global variable. It works, but TODO: change to something else
 $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   var id = localStorage.getItem("id");
   getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
@@ -127,22 +127,43 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
   });
 });
 $("#audioSource").on("timeupdate", function(){ // On audio change, save new time to localSettings
-  var floatSeconds = $("#audioSource").prop('currentTime'); // Bug: Audio is now persistent, but changes aren't saved
-  if(!(floatSeconds + 5 > currTime) || !(floatSeconds - 5 < currTime)){
-    $("#audioSource").prop('currentTime', currTime);
-    console.log("Reset time, it was too far apart!");
+  var floatSeconds = $("#audioSource").prop('currentTime');
+  var hours = localStorage.getItem("hours");
+  var minutes = localStorage.getItem("minutes");
+  var seconds = localStorage.getItem("seconds");
+  var fullSeconds = (hours * 3600) + (minutes * 60) + seconds;
+  console.log(floatSeconds <= 5);
+  console.log(fullSeconds + " and " + (fullSeconds >= 5));
+  if((floatSeconds <= 5) && (fullSeconds >= 5)){
+    $("#audioSource").prop('currentTime', fullSeconds); // CurrentTime was set
+    console.log("Should have set current time to " + fullSeconds);
   }
-  var intSeconds = Math.floor(floatSeconds);
-  console.log("Floatseconds is currently " + floatSeconds);
-  var hours = Math.floor(intSeconds / 3600);
-  intSeconds -= hours * 3600;
-  var minutes = Math.floor(intSeconds / 60);
-  intSeconds -= minutes * 60;
-  console.log("we are now left with hours " + hours + " minutes " + minutes + " seconds " + intSeconds);
-  localStorage.setItem("hours", hours);
-  localStorage.setItem("minutes", minutes);
-  localStorage.setItem("seconds", intSeconds);
+  else {
+    var intSeconds = Math.floor(floatSeconds);
+    console.log("Floatseconds is currently " + floatSeconds);
+    var hours = Math.floor(intSeconds / 3600);
+    intSeconds -= hours * 3600;
+    var minutes = Math.floor(intSeconds / 60);
+    intSeconds -= minutes * 60;
+    console.log("we are now left with hours " + hours + " minutes " + minutes + " seconds " + intSeconds);
+    localStorage.setItem("hours", hours);
+    localStorage.setItem("minutes", minutes);
+    localStorage.setItem("seconds", intSeconds);
+  }
 });
+//$("#audioSource").on("seeking", function(){
+//  console.log("Audio source was dragged by user");
+//  currTime = $("#audioSource").prop('currentTime');
+//  Math.floor(currTime);
+//  var hours = Math.floor(currTime / 3600);
+//  currTime -= hours * 3600;
+//  var minutes = Math.floor(currTime / 60);
+//  currTime -= minutes * 60;
+//  console.log("TIME WAS CHANGED TO " + hours + " minutes " + minutes + " seconds " + currTime);
+//  localStorage.setItem("hours", hours);
+//  localStorage.setItem("minutes", minutes);
+//  localStorage.setItem("seconds", currTime);
+//}); // If a user changes the time, switch currTime to this new time, change localStorage to this as well
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
   // Settings.html Loaded
 });
