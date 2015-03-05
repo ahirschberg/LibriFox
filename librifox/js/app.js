@@ -39,6 +39,7 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Not working with multiple pages
 //    -Search results aren't resetting
 
+var currTime = 0; // I don't like having this as a global variable. It works, but TODO: change to something else
 $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   var id = localStorage.getItem("id");
   getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
@@ -95,7 +96,7 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
       var xmlDoc = $.parseXML( xml );
       var newXML = $( xmlDoc );
       var title = newXML.find( "title" ); // This is the "official" chapter title
-        var bookTitle = localStorage.getItem("title");
+      var bookTitle = localStorage.getItem("title");
       var enclosure = newXML.find("enclosure");
       var currTitle = title[currIndex].innerHTML.replace("<![CDATA[", "").replace("]]>", "");
       var currEnclosure = enclosure[currIndex];
@@ -108,25 +109,29 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
           var seconds = localStorage.getItem("seconds");
           var hours = localStorage.getItem("hours");
           console.log("Loading your current place in the book at " + hours +  "hours, " + minutes + "minutes, " + seconds + "seconds");
+          var newSeconds = timeToInt(hours, minutes, seconds);
+          console.log("Newseconds is " + newSeconds);
+          currTime = newSeconds;
         }
         $("#audioSource").prop('type', "audio/mpeg");
         $("#audioSource").prop("src", url);
         $("#audioSource").trigger('load');
     });
       
-    $("#audioTime").on("currentTime", function(){
-      var currTimeSeconds = $("#audioTime").val();
-      var timeFormatted = intToTime(currTimeSeconds);
-      $("#audioSlider .labelTime").val(timeFormatted);
-      $("#audioSlider .ui-slider-handle").prop("title", timeFormatted);
-    });
+//    $("#audioTime").on("currentTime", function(){
+//      var currTimeSeconds = $("#audioTime").val();
+//      var timeFormatted = intToTime(currTimeSeconds);
+//      $("#audioSlider .labelTime").val(timeFormatted);
+//      $("#audioSlider .ui-slider-handle").prop("title", timeFormatted);
+//    });
   });
-    
-  //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
- //   $("#audioTime").slider("option", "0", timesecs);
 });
 $("#audioSource").on("timeupdate", function(){ // On audio change, save new time to localSettings
-  var floatSeconds = $("#audioSource").prop('currentTime');
+  var floatSeconds = $("#audioSource").prop('currentTime'); // Bug: Audio is now persistent, but changes aren't saved
+  if(!(floatSeconds + 5 > currTime) || !(floatSeconds - 5 < currTime)){
+    $("#audioSource").prop('currentTime', currTime);
+    console.log("Reset time, it was too far apart!");
+  }
   var intSeconds = Math.floor(floatSeconds);
   console.log("Floatseconds is currently " + floatSeconds);
   var hours = Math.floor(intSeconds / 3600);
@@ -136,10 +141,7 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
   console.log("we are now left with hours " + hours + " minutes " + minutes + " seconds " + intSeconds);
   localStorage.setItem("hours", hours);
   localStorage.setItem("minutes", minutes);
-  localStorage.setItem("seconds", seconds);
-//  var currTimeSeconds = $("#audioSource")
-//  var currTimeMinutes = $("#audioSource")
-//  var currTimeHours = $("#audioSource")
+  localStorage.setItem("seconds", intSeconds);
 });
 $( document ).on( "pagecreate", "#homeSettings", function( event ) {
   // Settings.html Loaded
@@ -157,6 +159,13 @@ function intToTime(seconds) {
     var m = Math.floor(seconds / 60);
     seconds -= m * 60;
     return h+ ":" +(m < 10 ? '0'+m : m) + ":" + (seconds < 10 ? '0'+seconds : seconds);
+}
+function timeToInt(hours, minutes, seconds){
+  var newSeconds = 0;
+  newSeconds += (hours * 3600);
+  newSeconds += (minutes * 60);
+  newSeconds += seconds;
+  return newSeconds;
 }
 $("#play").click(function(){
   $("#audioSource").trigger('play');
