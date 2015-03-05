@@ -74,6 +74,9 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
  //   $("#audioTime").slider("option", "0", timesecs);
   });
 });
+$("#audioSource").bind("load", function(){
+  console.log("Audio should have started playing by now.");
+});
 $( document ).on( "pagecreate", "#homeBook", function( event ){
   var currIndex = localStorage.getItem("index");
   var id = localStorage.getItem("id");
@@ -94,6 +97,10 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
       var currEnclosure = enclosure[currIndex];
       var url = $(currEnclosure).attr("url");// We no longer need to loop through enclosures or the index, we have that now!
         console.log("You are trying to read " + bookTitle + ": " + currTitle + " on chapter " + currIndex + " with URL " + url);
+        console.log("Loading Audio!");
+        $("#audioSource").prop('type', "audio/mpeg");
+        $("#audioSource").prop("src", url);
+        $("#audioSource").trigger('load');
       // Title is an array. It can be accessed via title[0], where 0 is the first chapters' name.
       // Each sound file can be accessed in a similar way, using the tag enclosure. The URL is included in this tag.
       // Note: These are taking a long time (~12-15secs) to complete. We should find a better way of storing these URLs - maybe a database?
@@ -139,6 +146,15 @@ function checkSettings(){
  // }
   //    }
 }
+$("#play").click(function(){
+  $("#audioSource").trigger('play');
+});
+$("#pause").click(function(){
+  $("#audioSource").trigger('pause');        
+});
+$("#stop").click(function(){
+  $("#audioSource").trigger('stop');
+});
 $("#volumeSlider").change(function(){
   writeToSettings("volume", $("#volumeSlider").slider("value").val());
 });
