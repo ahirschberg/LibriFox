@@ -105,11 +105,11 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
         console.log("Loading Audio!");
         if(localStorage.getItem("url") != null){
           console.log("Hey, you have already been here! Welcome back :)");
-          var minutes = localStorage.getItem("minutes");
-          var seconds = localStorage.getItem("seconds");
-          var hours = localStorage.getItem("hours");
+          var minutes = +localStorage.getItem("minutes");
+          var seconds = +localStorage.getItem("seconds");
+          var hours = +localStorage.getItem("hours");
           console.log("Loading your current place in the book at " + hours +  "hours, " + minutes + "minutes, " + seconds + "seconds");
-          var newSeconds = timeToInt(hours, minutes, seconds);
+          var newSeconds = seconds + (minutes * 60) + (hours * 3600); //timeToInt(hours, minutes, seconds)
           console.log("Newseconds is " + newSeconds);
           currTime = newSeconds;
         }
@@ -128,9 +128,9 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
 });
 $("#audioSource").on("timeupdate", function(){ // On audio change, save new time to localSettings
   var floatSeconds = $("#audioSource").prop('currentTime');
-  var hours = localStorage.getItem("hours");
-  var minutes = localStorage.getItem("minutes");
-  var seconds = localStorage.getItem("seconds");
+  var hours = +localStorage.getItem("hours");
+  var minutes = +localStorage.getItem("minutes");
+  var seconds = +localStorage.getItem("seconds");
   console.log(hours + ":" + minutes + ":" + seconds);
   var fullSeconds = (hours * 3600) + (minutes * 60) + seconds; // Don't know why, but this is giving a HUGE number. See console
   console.log(floatSeconds <= 5);                              // If it can be fixed, audio should be fine
@@ -187,7 +187,6 @@ function timeToInt(hours, minutes, seconds){
   newSeconds += (hours * 3600);
   newSeconds += (minutes * 60);
   newSeconds += seconds;
-  return newSeconds;
 }
 $("#play").click(function(){
   $("#audioSource").trigger('play');
