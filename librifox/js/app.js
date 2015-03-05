@@ -133,6 +133,18 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
 //    });
   });
 });
+$( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work only in LibriFox directory
+  var sdcard = navigator.getDeviceStorage('sdcard');
+  var request = sdcard.enumerate();
+  request.onsuccess = function(){
+    $("#downloadedFiles").append("<li>" + this.result.name + "</li>");
+    $("#downloadedFiles").listview('refresh');
+  };
+  request.onerror = function(){
+    console.log("No data found on SDCard!");
+    $("#noAvailableDownloads").show();
+  }
+});
 $("#audioSource").on("timeupdate", function(){ // On audio change, save new time to localSettings
   var floatSeconds = $("#audioSource").prop('currentTime');
   var hours = +localStorage.getItem("hours");
