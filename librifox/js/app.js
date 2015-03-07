@@ -21,21 +21,6 @@ window.addEventListener('DOMContentLoaded', function() {
     // Load book
 //    window.location = "book.html";
 //  }
-  // We want to wait until the localisations library has loaded all the strings.
-  // So we'll tell it to let us know once it's ready.
-  //navigator.mozL10n.once(start);
-
-  // ---
-
-  /*function start() {
-
-    var message = document.getElementById('message');
-
-    // We're using textContent because inserting content from external sources into your page using innerHTML can be dangerous.
-    // https://developer.mozilla.org/Web/API/Element.innerHTML#Security_considerations
-    message.textContent = translate('message');
-
-  }*/
 });
 
 // Bugs:
@@ -264,9 +249,10 @@ $("#newSearch").submit(function(event){
   return false;
 });
 
-function getJSON(url, load_callback) {
+function getDataFromUrl(url, type, load_callback) // ugh magic strings, dat camel case doe
+{
   var xhr = new XMLHttpRequest({ mozSystem: true });
-  if (xhr.overrideMimeType) {
+  if (xhr.overrideMimeType && type == 'json') {
     xhr.overrideMimeType('application/json');
   }
 
@@ -281,26 +267,8 @@ function getJSON(url, load_callback) {
   xhr.addEventListener('error', error_callback);
   xhr.addEventListener('timeout', error_callback);
   xhr.open('GET', url);
-  xhr.responseType = 'json';
+  if (type == 'json') { xhr.responseType = type; }
   xhr.send();
 }
-function getXML(url, load_callback){
-  var xhr = new XMLHttpRequest({ mozSystem: true });
-  if (xhr.overrideMimeType) {
-   // xhr.overrideMimeType('application/json');
-  }
-
-  var error_callback = function(e) {
-    console.log("error loading json from url " + url);
-    console.log(e);
-  }
-  xhr.addEventListener('load', function(e) {
-    load_callback(xhr,e);
-  });
-
-  xhr.addEventListener('error', error_callback);
-  xhr.addEventListener('timeout', error_callback);
-  xhr.open('GET', url);
-  xhr.responseType = 'xml';
-  xhr.send();
-}
+function getJSON(url, load_callback) { getDataFromUrl(url, 'json', load_callback); }
+function getXML(url, load_callback)  { getDataFromUrl(url, 'xml',  load_callback); }
