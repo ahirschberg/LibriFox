@@ -201,13 +201,14 @@ function downloadBook(){
   var URL = localStorage.getItem("download");
   console.log("URL determined to be " + URL);
   var sdcard = navigator.getDeviceStorage("sdcard");
-  if(Boolean(localStorage.getItem("directoryCreated")) === false){
 //    var download = $.get(URL);
+  getBlob(URL, function(xhr){
+      console.log("It downloaded - check filemanager");
+  });
 //    var blobType = "audio/mpeg3";
     
   //sdcard.addNamed(getFileFromURL(afjkladsjfdsa));
 // finish getting file (jQuery?), unzip it, place it in the LibriFox/books directory
-  }
 }
 $("#newSearch").submit(function(event){
   $("#booksList").empty(); // empty the list of any results from previous searches
