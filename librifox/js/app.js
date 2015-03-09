@@ -27,6 +27,7 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Not loading when spaces are used
 //    -Not working with multiple pages
 //    -Search results aren't resetting
+//    -Slider not refreshing on page view
 
 var currTime = 5; // I don't like having this as a global variable. It works, but TODO: change to something else
 $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
@@ -56,7 +57,6 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
           console.log("Stored index as " + chapter_index);
         });
         $("#chaptersList").append(chapterItem);
-        
       });
       $("#chaptersList").listview('refresh');
       // Title is an array. It can be accessed via title[0], where 0 is the first chapters' name.
@@ -72,10 +72,12 @@ $("#audioSource").bind("load", function(){
   console.log("Audio should have started playing by now.");
 });
 $( document ).on( "pagecreate", "#homeBook", function( event ){
+  $(".ui-slider-input").hide();
+  $(".ui-slider-handle").hide();
+  $("#downloadProgress").val(0).slider("refresh");
   $("#downloadFullBook").click(function(){
     var URL = localStorage.getItem("download");
     downloadBook(URL);
-    // Download URL to directory
   });
   $("#downloadPart").click(function(){
     var URL = localStorage.getItem("bookURL");
@@ -115,20 +117,15 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
         $("#audioSource").prop("src", url);
         $("#audioSource").trigger('load');
     });
-      
-//    $("#audioTime").on("currentTime", function(){
-//      var currTimeSeconds = $("#audioTime").val();
-//      var timeFormatted = intToTime(currTimeSeconds);
-//      $("#audioSlider .labelTime").val(timeFormatted);
-//      $("#audioSlider .ui-slider-handle").prop("title", timeFormatted);
-//    });
   });
 });
 $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work only in LibriFox directory
   var sdcard = navigator.getDeviceStorage('sdcard');
   var request = sdcard.enumerate();
   request.onsuccess = function(){
-    $("#downloadedFiles").append("<li>" + this.result.name + "</li>");
+    if(this.result){ 
+       $("#downloadedFiles").append("<li>" + this.result.name + "</li>");
+    };
     $("#downloadedFiles").listview('refresh');
   };
   request.onerror = function(){
@@ -160,26 +157,13 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
     localStorage.setItem("seconds", intSeconds);
   }
 });
-//$("#audioSource").on("seeking", function(){
-//  console.log("Audio source was dragged by user");
-//  currTime = $("#audioSource").prop('currentTime');
-//  Math.floor(currTime);
-//  var hours = Math.floor(currTime / 3600);
-//  currTime -= hours * 3600;
-//  var minutes = Math.floor(currTime / 60);
-//  currTime -= minutes * 60;
-//  console.log("TIME WAS CHANGED TO " + hours + " minutes " + minutes + " seconds " + currTime);
-//  localStorage.setItem("hours", hours);
-//  localStorage.setItem("minutes", minutes);
-//  localStorage.setItem("seconds", currTime);
-//}); // If a user changes the time, switch currTime to this new time, change localStorage to this as well
-$( document ).on( "pagecreate", "#homeSettings", function( event ) {
+//$( document ).on( "pagecreate", "#homeSettings", function( event ) {
   // Settings.html Loaded
-});
-$( document ).on( "pagecreate", "#mainIndex", function( event ) {
+//});
+//$( document ).on( "pagecreate", "#mainIndex", function( event ) {
 //  $("#booksList").empty();
   // Index.html Loaded
-});
+//});
 
 // Various used functions
 
@@ -190,6 +174,15 @@ function intToTime(seconds) {
     seconds -= m * 60;
     return h+ ":" +(m < 10 ? '0'+m : m) + ":" + (seconds < 10 ? '0'+seconds : seconds);
 }
+
+function downloadProgress(event){
+    if(event.lengthComputable){
+      var percentage = (event.loaded / event.total) * 100;
+      $("#downloadProgress").val(percentage).slider('refresh');
+      console.log("Downloading... " + percentage + "%");
+    }
+}
+
 $("#play").click(function(){
   $("#audioSource").trigger('play');
 });
@@ -259,10 +252,10 @@ $("#newSearch").submit(function(event){
   });
   return false;
 });
-
 function getDataFromUrl(url, type, load_callback) // NEEDS MORE MAGIC STRINGS
 {
   var xhr = new XMLHttpRequest({ mozSystem: true });
+
   if (xhr.overrideMimeType && type == 'json') {
     xhr.overrideMimeType('application/json');
   }
@@ -271,12 +264,19 @@ function getDataFromUrl(url, type, load_callback) // NEEDS MORE MAGIC STRINGS
     console.log("error loading json from url " + url);
     console.log(e);
   }
+  var updateProgress = function(event){
+    downloadProgress(event);
+  };
   xhr.addEventListener('load', function(e) {
     load_callback(xhr,e);
   });
 
   xhr.addEventListener('error', error_callback);
   xhr.addEventListener('timeout', error_callback);
+  xhr.addEventListener('progress', updateProgress);
+//  xhr.upload.addEventListener("load", transferComplete, false);
+//  xhr.upload.addEventListener("error", transferFailed, false);
+//  xhr.upload.addEventListener("abort", transferCanceled, false);
   xhr.open('GET', url);
   if (type != 'default') { xhr.responseType = type; }
   xhr.send();
