@@ -68,19 +68,19 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
  //   $("#audioTime").slider("option", "0", timesecs);
   });
 });
-$("#downloadFullBook").click(function(){
-  var URL = localStorage.getItem("download");
-  downloadBook(URL);
-  // Download URL to directory
-});
-$("#downloadPart").click(function(){
-  var URL = localStorage.getItem("bookURL");
-  downloadBook(URL);
-});
 $("#audioSource").bind("load", function(){
   console.log("Audio should have started playing by now.");
 });
 $( document ).on( "pagecreate", "#homeBook", function( event ){
+  $("#downloadFullBook").click(function(){
+    var URL = localStorage.getItem("download");
+    downloadBook(URL);
+    // Download URL to directory
+  });
+  $("#downloadPart").click(function(){
+    var URL = localStorage.getItem("bookURL");
+    downloadBook(URL);
+  });
   var currIndex = localStorage.getItem("index");
   var id = localStorage.getItem("id");
     getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
