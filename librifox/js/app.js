@@ -249,7 +249,7 @@ $("#newSearch").submit(function(event){
   return false;
 });
 
-function getDataFromUrl(url, type, load_callback) // ugh magic strings, dat camel case doe
+function getDataFromUrl(url, type, load_callback) // NEEDS MORE MAGIC STRINGS
 {
   var xhr = new XMLHttpRequest({ mozSystem: true });
   if (xhr.overrideMimeType && type == 'json') {
@@ -267,8 +267,9 @@ function getDataFromUrl(url, type, load_callback) // ugh magic strings, dat came
   xhr.addEventListener('error', error_callback);
   xhr.addEventListener('timeout', error_callback);
   xhr.open('GET', url);
-  if (type == 'json') { xhr.responseType = type; }
+  if (type != 'default') { xhr.responseType = type; }
   xhr.send();
 }
 function getJSON(url, load_callback) { getDataFromUrl(url, 'json', load_callback); }
-function getXML(url, load_callback)  { getDataFromUrl(url, 'xml',  load_callback); }
+function getXML(url, load_callback)  { getDataFromUrl(url, 'default',  load_callback); }
+function getBlob(url, load_callback) { getDataFromUrl(url, 'blob', load_callback); }
