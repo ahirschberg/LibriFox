@@ -123,8 +123,19 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
   var sdcard = navigator.getDeviceStorage('sdcard');
   var request = sdcard.enumerate();
   request.onsuccess = function(){
-    if(this.result){ 
-       $("#downloadedFiles").append("<li>" + this.result.name + "</li>");
+    if(this.result){ // Todo list isn't determining different list items
+      fileListItem = $('<li>' + this.result.name + '</li>');     
+// Options and menus to display info?
+//<select data-native-menu="false" name="fileSelect"><option data-placeholder="true" value="main-name">Name of file</option></select>      
+      fileListItem.click(function(){
+        console.log("You clicked on " + $(this).text());
+      });
+      fileListItem.on("taphold", function(){
+        console.log("Taphold on " + $(this).text());
+        // Open up menu to save, rename, delete
+      })
+      $("#downloadedFiles").append(fileListItem);
+      this.continue();
     };
     $("#downloadedFiles").listview('refresh');
   };
@@ -201,15 +212,9 @@ function downloadBook(URL){
   var sdcard = navigator.getDeviceStorage("sdcard");
 //    var download = $.get(URL);
   getBlob(URL, function(xhr){
-      console.log("It downloaded - check filemanager");
     var filename = URL.substring(URL.lastIndexOf('/')+1);
     sdcard.addNamed(xhr.response, filename);
-    console.log("Tried adding named XHR.response");
   });
-//    var blobType = "audio/mpeg3";
-    
-  //sdcard.addNamed(getFileFromURL(afjkladsjfdsa));
-// finish getting file (jQuery?), unzip it, place it in the LibriFox/books directory
 }
 $("#newSearch").submit(function(event){
   $("#booksList").empty(); // empty the list of any results from previous searches
