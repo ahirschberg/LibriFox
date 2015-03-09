@@ -219,7 +219,9 @@ function downloadBook(){
   if(Boolean(localStorage.getItem("directoryCreated")) === false){
 //    var download = $.get(URL);
 //    var blobType = "audio/mpeg3";
-    // finish getting file (jQuery?), unzip it, place it in the LibriFox/books directory
+    
+  //sdcard.addNamed(getFileFromURL(afjkladsjfdsa));
+// finish getting file (jQuery?), unzip it, place it in the LibriFox/books directory
   }
 }
 $("#newSearch").submit(function(event){
