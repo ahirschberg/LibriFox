@@ -68,9 +68,14 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
  //   $("#audioTime").slider("option", "0", timesecs);
   });
 });
-$("#download").click(function(){
-  downloadBook();
+$("#downloadFullBook").click(function(){
+  var URL = localStorage.getItem("download");
+  downloadBook(URL);
   // Download URL to directory
+});
+$("#downloadPart").click(function(){
+  var URL = localStorage.getItem("bookURL");
+  downloadBook(URL);
 });
 $("#audioSource").bind("load", function(){
   console.log("Audio should have started playing by now.");
@@ -94,6 +99,7 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
       var currTitle = title[currIndex].innerHTML.replace("<![CDATA[", "").replace("]]>", "");
       var currEnclosure = enclosure[currIndex];
       var url = $(currEnclosure).attr("url");// We no longer need to loop through enclosures or the index, we have that now!
+        localStorage.setItem("bookURL", url);
         console.log("You are trying to read " + bookTitle + ": " + currTitle + " on chapter " + currIndex + " with URL " + url);
         console.log("Loading Audio!");
         if(localStorage.getItem("url") != null){
@@ -196,14 +202,16 @@ $("#stop").click(function(){
 $("#volumeSlider").change(function(){
   writeToSettings("volume", $("#volumeSlider").slider("value").val());
 });
-function downloadBook(){
+function downloadBook(URL){
   var id = localStorage.getItem("id");
-  var URL = localStorage.getItem("download");
   console.log("URL determined to be " + URL);
   var sdcard = navigator.getDeviceStorage("sdcard");
 //    var download = $.get(URL);
   getBlob(URL, function(xhr){
       console.log("It downloaded - check filemanager");
+    var filename = URL.substring(URL.lastIndexOf('/')+1);
+    sdcard.addNamed(xhr.response, filename);
+    console.log("Tried adding named XHR.response");
   });
 //    var blobType = "audio/mpeg3";
     
