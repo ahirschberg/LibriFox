@@ -29,6 +29,11 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Search results aren't resetting
 //    -Slider not refreshing on page view
 
+// ------- TODO LIST -------
+// Set audioManager SRC to downloaded file, also add delete buttons to listView -- 
+// Delete is the .delete function of the DeviceStorage API
+// Add directories for each book, show downloaded files as a list of directories
+
 var currTime = 5; // I don't like having this as a global variable. It works, but TODO: change to something else
 $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   var id = localStorage.getItem("id");
