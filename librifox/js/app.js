@@ -129,7 +129,7 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
   var request = sdcard.enumerate();
   request.onsuccess = function(){
     if(this.result){ // Todo list isn't determining different list items
-      fileListItem = $('<li>' + this.result.name + '</li>');     
+      fileListItem = $('<li><a data-icon="delete">' + this.result.name + '</a></li>');     
 // Options and menus to display info?
 //<select data-native-menu="false" name="fileSelect"><option data-placeholder="true" value="main-name">Name of file</option></select>      
       fileListItem.click(function(){

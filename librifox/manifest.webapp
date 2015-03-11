@@ -16,7 +16,7 @@
   "type": "privileged",
   "permissions": {
     "systemXHR": {"description": "Necessary for fetching data from the LibriVox server"},
-    "device-storage:sdcard":{"access": "readwrite"}
+      "device-storage:sdcard":{"access": "readwrite", "description": "used for reading and writing of audiobooks to sdcard"}
   },
   "installs_allowed_from": [
     "*"
