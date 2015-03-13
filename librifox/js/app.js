@@ -35,48 +35,43 @@ window.addEventListener('DOMContentLoaded', function() {
 // Add directories for each book, show downloaded files as a list of directories
 
 var currTime = 5; // I don't like having this as a global variable. It works, but TODO: change to something else
-$( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
+
+$( document ).on( "pageinit", "#chaptersListPage", function( event ) {
   var id = localStorage.getItem("id");
   getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
-    var book = xhr.response.books[0];
+   
+    // TODO write a JSON parse method so that we don't have ugly stuff like this sitting around
     var timesecs = xhr.response.books[0].totaltimesecs;
-    var time = xhr.response.books[0].totaltime;
     $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
-    // -- Initialize Get RSS --
+    
     getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr){
-      var xml = xhr.response;
-      var xmlDoc = $.parseXML( xml );
-      var newXML = $( xmlDoc );
-      var title = newXML.find( "title" );
-      var enclosure = newXML.find("enclosure");
-      var currTitle;
-      var currEnclosure;
-      $.each(title, function(index){
-        currTitle = title[index].innerHTML;
-        // Replace unnecessary CDATA characters
-        currTitle = currTitle.replace("<![CDATA[", "").replace("]]>", "");
-        var chapterItem = $('<li chapter-id=' + index + '><a href="book.html"><h2>' + currTitle + '</h2></a></li>');
-        chapterItem.click(function(){
+      var xml = $(xhr.response);
+      var titles = xml.find("title");
+      titles.each(function(index){
+        cdata_regex = /^<!\[CDATA\[(.*)\]\]>$/;
+        var title = cdata_regex.exec($(this).text())[1] // the text inside the <CDATA[[]]> is returned at index 1
+        var chapterListItem = $('<li chapter-id=' + index + '><a href="book.html"><h2>' + title + '</h2></a></li>');
+        chapterListItem.click(function(){
               chapter_index = $(this).attr("chapter-id");
-              localStorage.setItem("index", chapter_index);
-          console.log("Stored index as " + chapter_index);
+              localStorage.setItem("index", chapter_index); // TODO change localstorage to Book object
         });
-        $("#chaptersList").append(chapterItem);
+        $("#chaptersList").append(chapterListItem);
       });
       $("#chaptersList").listview('refresh');
-      // Title is an array. It can be accessed via title[0], where 0 is the first chapters' name.
-      // Each sound file can be accessed in a similar way, using the tag enclosure. The URL is included in this tag.
-      // Note: These are taking a long time (~12-15secs) to complete. We should find a better way of storing these URLs - maybe a database?
     });
-    
-  //  $("#audioSource").attr("src", ) -> Setting Audio Source, once hosted
- //   $("#audioTime").slider("option", "0", timesecs);
   });
 });
+
 $("#audioSource").bind("load", function(){
   console.log("Audio should have started playing by now.");
 });
-$( document ).on( "pagecreate", "#homeBook", function( event ){
+
+function Book(args)
+{
+  this.json = args.json;
+}
+
+$( document ).on( "pageinit", "#homeBook", function( event ){
   $(".ui-slider-input").hide();
   $(".ui-slider-handle").hide();
   $("#downloadProgress").val(0).slider("refresh");
@@ -97,34 +92,25 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
       $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
       // -- Initialize Get RSS --
       getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr){
-      var xml = xhr.response;
-      var xmlDoc = $.parseXML( xml );
-      var newXML = $( xmlDoc );
-      var title = newXML.find( "title" ); // This is the "official" chapter title
-      var bookTitle = localStorage.getItem("title");
-      var enclosure = newXML.find("enclosure");
-      var currTitle = title[currIndex].innerHTML.replace("<![CDATA[", "").replace("]]>", "");
-      var currEnclosure = enclosure[currIndex];
-      var url = $(currEnclosure).attr("url");// We no longer need to loop through enclosures or the index, we have that now!
+        var xml = $(xhr.response);
+        var title = xml.find( "title" ); // This is the "official" chapter title
+        var bookTitle = localStorage.getItem("title");
+        var enclosure = xml.find("enclosure");
+        var currTitle = title[currIndex].innerHTML.replace("<![CDATA[", "").replace("]]>", "");
+        var currEnclosure = enclosure[currIndex];
+        var url = $(currEnclosure).attr("url");// We no longer need to loop through enclosures or the index, we have that now!
         localStorage.setItem("bookURL", url);
         console.log("You are trying to read " + bookTitle + ": " + currTitle + " on chapter " + currIndex + " with URL " + url);
         console.log("Loading Audio!");
-        if(localStorage.getItem("url") != null){
-          console.log("Hey, you have already been here! Welcome back :)");
-          var minutes = +localStorage.getItem("minutes");
-          var seconds = +localStorage.getItem("seconds");
-          var hours = +localStorage.getItem("hours");
-          console.log("Loading your current place in the book at " + hours +  "hours, " + minutes + "minutes, " + seconds + "seconds");
-          var newSeconds = seconds + (minutes * 60) + (hours * 3600);
-          currTime = newSeconds;
-        }
+
         $("#audioSource").prop('type', "audio/mpeg");
         $("#audioSource").prop("src", url);
         $("#audioSource").trigger('load');
     });
   });
 });
-$( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work only in LibriFox directory
+
+$( document ).on( "pageinit", "#homeFileManager", function(){ // TODO work only in LibriFox directory
   var sdcard = navigator.getDeviceStorage('sdcard');
   var request = sdcard.enumerate();
   request.onsuccess = function(){
@@ -173,10 +159,10 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
     localStorage.setItem("seconds", intSeconds);
   }
 });
-//$( document ).on( "pagecreate", "#homeSettings", function( event ) {
+//$( document ).on( "pageinit", "#homeSettings", function( event ) {
   // Settings.html Loaded
 //});
-//$( document ).on( "pagecreate", "#mainIndex", function( event ) {
+//$( document ).on( "pageinit", "#mainIndex", function( event ) {
 //  $("#booksList").empty();
   // Index.html Loaded
 //});
