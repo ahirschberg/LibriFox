@@ -34,40 +34,58 @@ window.addEventListener('DOMContentLoaded', function() {
 // Delete is the .delete function of the DeviceStorage API
 // Add directories for each book, show downloaded files as a list of directories
 
-var storedBooks = {};
-$( document ).on( "pageinit", "#chaptersListPage", function( event ) {
+var bookCache = {};
+
+// get data after ? in url, such as 45 from '/chapters.html?45' (there's most likely a more elegant solution than this for passing variables between pagecreate events)
+function bookIDFromUrlAttribute(target) {
+  var data_url = target.attributes['data-url'].value;
+  var data = data_url.substring(data_url.lastIndexOf('?') + 1); 
+  console.log(data);
+  return data;
+}
+
+$( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   // $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
-  
-  var display_chapter = function (chapter) { // is this good coding practice?
+  var currBook = bookCache[bookIDFromUrlAttribute(event.target)];
+  if (!currBook) { // currBook is undefined if you refresh the app from WebIDE on a chapter list page
+    console.warn("Chapters List: currBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
+    return false;
+  }
+
+  var generate_chapter_list_item = function (chapter) { // is this good coding practice? local method defined inside method
     var chapterListItem = $('<li chapter-id=' + chapter.index + '><a href="book.html"><h2>' + chapter.title + '</h2></a></li>');
     chapterListItem.click(function (){
       chapter_index = $(this).attr("chapter-id");
-      localStorage.setItem("index", chapter_index); // TODO figure out how to pass variables in page changes
+      localStorage.setItem("index", chapter_index); // Still uses localstorage, needs to be updated.
     });
     $("#chaptersList").append(chapterListItem);
   }
   
   if (currBook.chapters != null) {
-    $.each(currBook.chapters, function(index, item) { 
-      display_chapter(item);
+    console.log('currBook.chapters was not null');
+    $.each(currBook.chapters, function(index, chapter) { 
+      generate_chapter_list_item(chapter);
+      $("#chaptersList").listview('refresh');
+    });
+  } else {
+    console.log('currBook.chapters was null');
+    getXML("https://librivox.org/rss/" + encodeURIComponent(currBook.id), function(xhr) { // get streaming urls from book's rss page
+      var xml      = $(xhr.response),
+        titles   = xml.find("title"),
+        chapters = [];
+      
+      titles.each(function(index, element) {
+        var chapter = new Chapter({'index': index, 'title': element.text, 'tag': element})
+        chapters.push(chapter);
+        generate_chapter_list_item(chapter);
+      });
+      currBook.chapters = chapters;
+      $("#chaptersList").listview('refresh');
     });
   }
-  getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr) { // get streaming urls from book's rss page
-    var xml = $(xhr.response),
-        titles = xml.find("title"),
-        chapters = [];
-    titles.each( function(index, element) {
-      var chapter = new Chapter({'index': index, 'title': element.text(), 'tag': element})
-      chapters.push(chapter);
-      display_chapter(element);
-    });
-    currBook.chapters = chapters;
-    $("#chaptersList").listview('refresh');
-  });
 });
 
-function Book(args)
-{
+function Book(args) {
   this.chapters = args.chapters
   
   var  json        = args.json;
@@ -76,8 +94,7 @@ function Book(args)
   this.title       = json.title;
   this.id          = json.id;
 }
-function Chapter(args)
-{
+function Chapter(args) {
   title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
   title_match = title_regex.exec(args.title);
   this.title  = title_match[1] ? title_match[1] : args.title; // if regex doesn't match, fall back to raw string
@@ -85,7 +102,8 @@ function Chapter(args)
   this.index  = args.index;
 }
 
-$( document ).on( "pageinit", "#homeBook", function( event ){
+// TODO refactor this method (it's the copy and paste version of that other method :P)
+$( document ).on( "pagecreate", "#homeBook", function( event ){
   $(".ui-slider-input").hide();
   $(".ui-slider-handle").hide();
   $("#downloadProgress").val(0).slider("refresh");
@@ -124,7 +142,7 @@ $( document ).on( "pageinit", "#homeBook", function( event ){
   });
 });
 
-$( document ).on( "pageinit", "#homeFileManager", function(){ // TODO work only in LibriFox directory
+$( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work only in LibriFox directory
   var sdcard = navigator.getDeviceStorage('sdcard');
   var request = sdcard.enumerate();
   request.onsuccess = function(){
@@ -173,31 +191,6 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
     localStorage.setItem("seconds", intSeconds);
   }
 });
-//$( document ).on( "pageinit", "#homeSettings", function( event ) {
-  // Settings.html Loaded
-//});
-//$( document ).on( "pageinit", "#mainIndex", function( event ) {
-//  $("#booksList").empty();
-  // Index.html Loaded
-//});
-
-// Various used functions
-
-function intToTime(seconds) {
-    var h = Math.floor(seconds / 3600);
-    seconds -= h * 3600;
-    var m = Math.floor(seconds / 60);
-    seconds -= m * 60;
-    return h+ ":" +(m < 10 ? '0'+m : m) + ":" + (seconds < 10 ? '0'+seconds : seconds);
-}
-
-function downloadProgress(event){
-    if(event.lengthComputable){
-      var percentage = (event.loaded / event.total) * 100;
-      $("#downloadProgress").val(percentage).slider('refresh');
-      console.log("Downloading... " + percentage + "%");
-    }
-}
 
 $("#play").click(function(){
   $("#audioSource").trigger('play');
@@ -211,15 +204,23 @@ $("#stop").click(function(){
 $("#volumeSlider").change(function(){
   writeToSettings("volume", $("#volumeSlider").slider("value").val());
 });
-function downloadBook(URL){
+function downloadBook(URL) {
   var id = localStorage.getItem("id");
   console.log("URL determined to be " + URL);
   var sdcard = navigator.getDeviceStorage("sdcard");
 //    var download = $.get(URL);
-  getBlob(URL, function(xhr){
+  var progress_callback = function (event) {
+    if(event.lengthComputable){
+      var percentage = (event.loaded / event.total) * 100;
+      $("#downloadProgress").val(percentage).slider('refresh');
+      console.log("Downloading... " + percentage + "%");
+    }
+  }
+
+  getBlob(URL, function(xhr) {
     var filename = URL.substring(URL.lastIndexOf('/')+1);
     sdcard.addNamed(xhr.response, filename);
-  });
+  }, {'progress_callback': progress_callback});
 }
 $("#newSearch").submit(function(event){
   $("#booksList").empty(); // empty the list of any results from previous searches
@@ -233,11 +234,8 @@ $("#newSearch").submit(function(event){
       console.log("librivox responded with " + xhr.response.books.length + " book(s) and status " + xhr.status);
         xhr.response.books.forEach(function(entry) {
           var book = new Book({'json': entry});
-          storedBooks[book.id] = book; // this stores id 3 time (as key, in book object, and in book object json), which is a little bit icky
-          bookListItem = $('<li book-id=' + book.id + '><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
-          bookListItem.click(function(){
-            // TODO
-          });
+          bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json), which is a little bit icky
+          bookListItem = $('<li><a href="chapters.html?'+ book.id + '"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
           $("#booksList").append(bookListItem);
         });
     }
@@ -245,28 +243,31 @@ $("#newSearch").submit(function(event){
   });
   return false; // cancels form event
 });
-function getDataFromUrl(url, type, load_callback) // NEEDS MORE MAGIC STRINGS
+function getDataFromUrl(url, type, load_callback, other_args) // NEEDS MORE MAGIC STRINGS
 {
+  other_args = other_args || {};
   var xhr = new XMLHttpRequest({ mozSystem: true });
 
   if (xhr.overrideMimeType && type == 'json') {
     xhr.overrideMimeType('application/json');
   }
 
-  var error_callback = function(e) {
+  other_args.error_callback = other_args.error_callback || function(e) {
     console.log("error loading json from url " + url);
     console.log(e);
   }
-  var updateProgress = function(event){
-    downloadProgress(event);
-  };
+  other_args.timeout_callback = other_args.timeout_callback || function(e) {
+    console.log("timeout loading json from url " + url);
+    console.log(e);
+  }
+
   xhr.addEventListener('load', function(e) {
     load_callback(xhr,e);
   });
 
-  xhr.addEventListener('error', error_callback);
-  xhr.addEventListener('timeout', error_callback);
-  xhr.addEventListener('progress', updateProgress);
+  xhr.addEventListener('error', other_args.error_callback);
+  xhr.addEventListener('timeout', other_args.timeout_callback);
+  xhr.addEventListener('progress', other_args.progress_callback);
 //  xhr.upload.addEventListener("load", transferComplete, false);
 //  xhr.upload.addEventListener("error", transferFailed, false);
 //  xhr.upload.addEventListener("abort", transferCanceled, false);
@@ -274,6 +275,6 @@ function getDataFromUrl(url, type, load_callback) // NEEDS MORE MAGIC STRINGS
   if (type != 'default') { xhr.responseType = type; }
   xhr.send();
 }
-function getJSON(url, load_callback) { getDataFromUrl(url, 'json', load_callback); }
-function getXML(url, load_callback)  { getDataFromUrl(url, 'default',  load_callback); }
-function getBlob(url, load_callback) { getDataFromUrl(url, 'blob', load_callback); }
+function getJSON(url, load_callback, other_args) { getDataFromUrl(url, 'json',     load_callback, other_args); }
+function getXML(url, load_callback, other_args)  { getDataFromUrl(url, 'default',  load_callback, other_args); }
+function getBlob(url, load_callback, other_args) { getDataFromUrl(url, 'blob',     load_callback, other_args); }
