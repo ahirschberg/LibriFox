@@ -34,41 +34,55 @@ window.addEventListener('DOMContentLoaded', function() {
 // Delete is the .delete function of the DeviceStorage API
 // Add directories for each book, show downloaded files as a list of directories
 
-var currTime = 5; // I don't like having this as a global variable. It works, but TODO: change to something else
-
+var storedBooks = {};
 $( document ).on( "pageinit", "#chaptersListPage", function( event ) {
-  var id = localStorage.getItem("id");
-  getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
-   
-    // TODO write a JSON parse method so that we don't have ugly stuff like this sitting around
-    var timesecs = xhr.response.books[0].totaltimesecs;
-    $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
-    
-    getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr){
-      var xml = $(xhr.response);
-      var titles = xml.find("title");
-      titles.each(function(index){
-        cdata_regex = /^<!\[CDATA\[(.*)\]\]>$/;
-        var title = cdata_regex.exec($(this).text())[1] // the text inside the <CDATA[[]]> is returned at index 1
-        var chapterListItem = $('<li chapter-id=' + index + '><a href="book.html"><h2>' + title + '</h2></a></li>');
-        chapterListItem.click(function(){
-              chapter_index = $(this).attr("chapter-id");
-              localStorage.setItem("index", chapter_index); // TODO change localstorage to Book object
-        });
-        $("#chaptersList").append(chapterListItem);
-      });
-      $("#chaptersList").listview('refresh');
+  // $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
+  
+  var display_chapter = function (chapter) { // is this good coding practice?
+    var chapterListItem = $('<li chapter-id=' + chapter.index + '><a href="book.html"><h2>' + chapter.title + '</h2></a></li>');
+    chapterListItem.click(function (){
+      chapter_index = $(this).attr("chapter-id");
+      localStorage.setItem("index", chapter_index); // TODO figure out how to pass variables in page changes
     });
+    $("#chaptersList").append(chapterListItem);
+  }
+  
+  if (currBook.chapters != null) {
+    $.each(currBook.chapters, function(index, item) { 
+      display_chapter(item);
+    });
+  }
+  getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr) { // get streaming urls from book's rss page
+    var xml = $(xhr.response),
+        titles = xml.find("title"),
+        chapters = [];
+    titles.each( function(index, element) {
+      var chapter = new Chapter({'index': index, 'title': element.text(), 'tag': element})
+      chapters.push(chapter);
+      display_chapter(element);
+    });
+    currBook.chapters = chapters;
+    $("#chaptersList").listview('refresh');
   });
-});
-
-$("#audioSource").bind("load", function(){
-  console.log("Audio should have started playing by now.");
 });
 
 function Book(args)
 {
-  this.json = args.json;
+  this.chapters = args.chapters
+  
+  var  json        = args.json;
+  this.json        = json;
+  this.description = json.description;
+  this.title       = json.title;
+  this.id          = json.id;
+}
+function Chapter(args)
+{
+  title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
+  title_match = title_regex.exec(args.title);
+  this.title  = title_match[1] ? title_match[1] : args.title; // if regex doesn't match, fall back to raw string
+  this.tag    = $(args.tag);
+  this.index  = args.index;
 }
 
 $( document ).on( "pageinit", "#homeBook", function( event ){
@@ -217,36 +231,19 @@ $("#newSearch").submit(function(event){
     }
     else {
       console.log("librivox responded with " + xhr.response.books.length + " book(s) and status " + xhr.status);
-        xhr.response.books.forEach(function(entry){
-          var title = entry.title;
-          var id = entry.id;
-          var description = entry.description;
-          var text = $.parseHTML(description);
-          var downloadURL = entry.url_zip_file;
-          var realText = $(text).text();
-          var id = entry.id;
-          if(title != ''){
-            bookListItem = $('<li book-id=' + id + '><a href="chapters.html"><h2>' + title + '</h2><p>' + realText + '</p></a></li>');
-            bookListItem.click(function(){
-              book_id = $(this).attr("book-id");
-              localStorage.setItem("id", book_id);
-              localStorage.setItem("title", title);
-              localStorage.setItem("download", downloadURL);
-              localStorage.setItem("url", "true");
-              localStorage.setItem("minutes", "0");
-              localStorage.setItem("seconds", "0");
-              localStorage.setItem("hours", "0");
-            });
-            $("#booksList").append(bookListItem);
-          }
-          else {
-            console.log("Nothing to add!");
-          }
+        xhr.response.books.forEach(function(entry) {
+          var book = new Book({'json': entry});
+          storedBooks[book.id] = book; // this stores id 3 time (as key, in book object, and in book object json), which is a little bit icky
+          bookListItem = $('<li book-id=' + book.id + '><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
+          bookListItem.click(function(){
+            // TODO
+          });
+          $("#booksList").append(bookListItem);
         });
     }
     $("#booksList").listview('refresh');
   });
-  return false;
+  return false; // cancels form event
 });
 function getDataFromUrl(url, type, load_callback) // NEEDS MORE MAGIC STRINGS
 {
