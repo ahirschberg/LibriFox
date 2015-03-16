@@ -3,38 +3,14 @@
     <head>
         <meta charset="utf-8" />
         <meta name="description" content="A LibriVox app" />
-
-        <!--
-          viewport allows you to control how mobile browsers will render your content.
-          width=device-width tells mobile browsers to render your content across the
-          full width of the screen, without being zoomed out (by default it would render
-          it at a desktop width, then shrink it to fit.)
-          Read more about it here:
-          https://developer.mozilla.org/Mozilla/Mobile/Viewport_meta_tag
-        -->
         <meta name="viewport" content="width=device-width" />
         <link rel="stylesheet" href="css/app.css" />
 
         <!--
-        Inline JavaScript code is not allowed for privileged and certified apps,
-        due to Content Security Policy restrictions.
-        You can read more about it here: https://developer.mozilla.org/Apps/CSP
-        Plus keeping your JavaScript separated from your HTML is always a good practice!
-
-        We're also using the 'defer' attribute. This allows us to tell the browser that
-        it should not wait for this file to load before continuing to load the rest of
-        resources in the page. Then, once everything has been loaded, it will parse and
-        execute the deferred files.
         Read about defer: https://developer.mozilla.org/Web/HTML/Element/script#attr-defer
         -->
         <script src="js/jquery-2.1.3.js"></script>
         <script type="text/javascript" src="js/app.js" defer></script>
-
-        <!--
-        The following two lines are for loading the localisations library
-        and the localisation data-so people can use the app in their
-        own language (as long as you provide translations).
-        -->
         <link rel="prefetch" type="application/l10n" href="data/locales.ini" />
         <script type="text/javascript" src="js/libs/l10n.js"></script>
         <script src="jquerymobile/jquery.mobile-1.4.5.js"></script>
@@ -43,7 +19,7 @@
     <body>
         <div data-role="page" id="mainIndex">
             <header data-role="header" id="settingsHeader">
-                <h1>LibriFox</h1> <!-- TODO ERROR USING STRING FROM FILE - KEEPS RESETTING HEADER! !-->
+                <h1>LibriFox</h1> <!-- TODO ERROR USING STRING FROM FILE (Localization) - KEEPS RESETTING HEADER! !-->
                 <a href="settings.html" data-icon="gear" data-iconpos="notext"></a>
                 <a href="filemanager.html" data-icon="cloud" data-iconpos="notext"></a>
             </header>

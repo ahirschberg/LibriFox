@@ -103,7 +103,7 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
   var sdcard = navigator.getDeviceStorage('sdcard');
   var request = sdcard.enumerate();
   request.onsuccess = function(){
-    if(this.result){ // Todo list isn't determining different list items
+    if(this.result){
       fileListItem = $('<li><a data-icon="delete">' + this.result.name + '</a></li>');     
 // Options and menus to display info?
 //<select data-native-menu="false" name="fileSelect"><option data-placeholder="true" value="main-name">Name of file</option></select>      
@@ -111,7 +111,6 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
         console.log("You clicked on " + $(this).text());
       });
       fileListItem.on("taphold", function(){
-        console.log("Taphold on " + $(this).text());
         // Open up menu to save, rename, delete
       })
       $("#downloadedFiles").append(fileListItem);
@@ -129,16 +128,12 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
   var hours = +localStorage.getItem("hours");
   var minutes = +localStorage.getItem("minutes");
   var seconds = +localStorage.getItem("seconds");
-  console.log(hours + ":" + minutes + ":" + seconds);
   var fullSeconds = (hours * 3600) + (minutes * 60) + seconds;
-  console.log(floatSeconds <= 5);
-  console.log(fullSeconds + " and " + (fullSeconds >= 5));
   if((floatSeconds <= 5) && (fullSeconds >= 5)){
     $("#audioSource").prop('currentTime', fullSeconds);
   }
   else {
     var intSeconds = Math.floor(floatSeconds);
-    console.log("Floatseconds is currently " + floatSeconds);
     var hours = Math.floor(intSeconds / 3600);
     intSeconds -= hours * 3600;
     var minutes = Math.floor(intSeconds / 60);
@@ -147,19 +142,6 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
     localStorage.setItem("minutes", minutes);
     localStorage.setItem("seconds", intSeconds);
   }
-});
-
-$("#play").click(function(){
-  $("#audioSource").trigger('play');
-});
-$("#pause").click(function(){
-  $("#audioSource").trigger('pause');        
-});
-$("#stop").click(function(){
-  $("#audioSource").trigger('stop');
-});
-$("#volumeSlider").change(function(){
-  writeToSettings("volume", $("#volumeSlider").slider("value").val());
 });
 function downloadBook(URL) {
   var id = localStorage.getItem("id");
