@@ -1,26 +1,11 @@
-// DOMContentLoaded is fired once the document has been loaded and parsed,
-// but without waiting for other external resources to load (css/images/etc)
-// That makes the app more responsive and perceived as faster.
-// https://developer.mozilla.org/Web/Reference/Events/DOMContentLoaded
 window.addEventListener('DOMContentLoaded', function() {
-
-  // We'll ask the browser to use strict code to help us catch errors earlier.
-  // https://developer.mozilla.org/Web/JavaScript/Reference/Functions_and_function_scope/Strict_mode
   'use strict';
-
   var translate = navigator.mozL10n.get;
   var hasLoaded = localStorage.getItem("default");
   if(Boolean(localStorage.getItem("default")) != true){
     localStorage.setItem("default", "true"); // Set default settings
     localStorage.setItem("directoryCreated", "false");
   }
-//  if(hasLoaded == null || Boolean(hasLoaded) != true){
-//    localStorage.setItem("default", "true");
-//  }
-//  else {
-    // Load book
-//    window.location = "book.html";
-//  }
 });
 
 // Bugs:
@@ -35,51 +20,41 @@ window.addEventListener('DOMContentLoaded', function() {
 // Add directories for each book, show downloaded files as a list of directories
 
 var bookCache = {};
-
-// get data after ? in url, such as 45 from '/chapters.html?45' (there's most likely a more elegant solution than this for passing variables between pagecreate events)
-function bookIDFromUrlAttribute(target) {
-  var data_url = target.attributes['data-url'].value;
-  var data = data_url.substring(data_url.lastIndexOf('?') + 1); 
-  console.log(data);
-  return data;
-}
+var selectedBook;
 
 $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
-  // $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
-  var currBook = bookCache[bookIDFromUrlAttribute(event.target)];
-  if (!currBook) { // currBook is undefined if you refresh the app from WebIDE on a chapter list page
-    console.warn("Chapters List: currBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
+  if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
+    console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
     return false;
   }
 
   var generate_chapter_list_item = function (chapter) { // is this good coding practice? local method defined inside method
     var chapterListItem = $('<li chapter-id=' + chapter.index + '><a href="book.html"><h2>' + chapter.title + '</h2></a></li>');
     chapterListItem.click(function (){
-      chapter_index = $(this).attr("chapter-id");
-      localStorage.setItem("index", chapter_index); // Still uses localstorage, needs to be updated.
+      selectedBook.currentChapter = $(this).attr("chapter-id");
     });
     $("#chaptersList").append(chapterListItem);
   }
   
-  if (currBook.chapters != null) {
-    console.log('currBook.chapters was not null');
-    $.each(currBook.chapters, function(index, chapter) { 
+  if (selectedBook.chapters != null) {
+    console.log('selectedBook.chapters was not null');
+    $.each(selectedBook.chapters, function(index, chapter) { 
       generate_chapter_list_item(chapter);
       $("#chaptersList").listview('refresh');
     });
   } else {
-    console.log('currBook.chapters was null');
-    getXML("https://librivox.org/rss/" + encodeURIComponent(currBook.id), function(xhr) { // get streaming urls from book's rss page
+    console.log('selectedBook.chapters was null');
+    getXML("https://librivox.org/rss/" + encodeURIComponent(selectedBook.id), function(xhr) { // get streaming urls from book's rss page
       var xml      = $(xhr.response),
         titles   = xml.find("title"),
         chapters = [];
       
       titles.each(function(index, element) {
-        var chapter = new Chapter({'index': index, 'title': element.text, 'tag': element})
+        var chapter = new Chapter({'index': index, 'title': element.text, 'tag': element}) // add enclosure and URL
         chapters.push(chapter);
         generate_chapter_list_item(chapter);
       });
-      currBook.chapters = chapters;
+      selectedBook.chapters = chapters;
       $("#chaptersList").listview('refresh');
     });
   }
@@ -93,19 +68,21 @@ function Book(args) {
   this.description = json.description;
   this.title       = json.title;
   this.id          = json.id;
+  this.currentChapter = undefined;
 }
 function Chapter(args) {
   title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
   title_match = title_regex.exec(args.title);
   this.title  = title_match[1] ? title_match[1] : args.title; // if regex doesn't match, fall back to raw string
   this.tag    = $(args.tag);
-  this.index  = args.index;
+  this.index  = args.index; // TODO: Add whenever this method is called, return current chapter or get it if not available
+  this.url    = args.url;
 }
 
 // TODO refactor this method (it's the copy and paste version of that other method :P)
 $( document ).on( "pagecreate", "#homeBook", function( event ){
   $(".ui-slider-input").hide();
-  $(".ui-slider-handle").hide();
+  $(".ui-slider-handle").hide(); // Issue here - the page isn't refreshing onLoad. As a result? Slider isn't keeping CSS values
   $("#downloadProgress").val(0).slider("refresh");
   $("#downloadFullBook").click(function(){
     var URL = localStorage.getItem("download");
@@ -115,31 +92,11 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
     var URL = localStorage.getItem("bookURL");
     downloadBook(URL);
   });
-  var currIndex = localStorage.getItem("index");
-  var id = localStorage.getItem("id");
-    getJSON("https://librivox.org/api/feed/audiobooks/id/" + encodeURIComponent(id) + "?&format=json", function(xhr){
-      var book = xhr.response.books[0];
-      var timesecs = xhr.response.books[0].totaltimesecs;
-      var time = xhr.response.books[0].totaltime;
-      $("#audioTime").attr("max", parseInt(timesecs)).slider("refresh");
-      // -- Initialize Get RSS --
-      getXML("https://librivox.org/rss/" + encodeURIComponent(id), function(xhr){
-        var xml = $(xhr.response);
-        var title = xml.find( "title" ); // This is the "official" chapter title
-        var bookTitle = localStorage.getItem("title");
-        var enclosure = xml.find("enclosure");
-        var currTitle = title[currIndex].innerHTML.replace("<![CDATA[", "").replace("]]>", "");
-        var currEnclosure = enclosure[currIndex];
-        var url = $(currEnclosure).attr("url");// We no longer need to loop through enclosures or the index, we have that now!
-        localStorage.setItem("bookURL", url);
-        console.log("You are trying to read " + bookTitle + ": " + currTitle + " on chapter " + currIndex + " with URL " + url);
-        console.log("Loading Audio!");
-
-        $("#audioSource").prop('type', "audio/mpeg");
-        $("#audioSource").prop("src", url);
-        $("#audioSource").trigger('load');
-    });
-  });
+// get book
+  var url = selectedBook.currentChapter.url;
+  $("#audioSource").prop('type', "audio/mpeg");
+  $("#audioSource").prop("src", url);
+  $("#audioSource").trigger('load');
 });
 
 $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work only in LibriFox directory
@@ -235,7 +192,10 @@ $("#newSearch").submit(function(event){
         xhr.response.books.forEach(function(entry) {
           var book = new Book({'json': entry});
           bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json), which is a little bit icky
-          bookListItem = $('<li><a href="chapters.html?'+ book.id + '"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
+          bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
+          bookListItem.click(function(){
+            selectedBook = bookCache[$(this).attr("book-id")];
+          });
           $("#booksList").append(bookListItem);
         });
     }
@@ -277,4 +237,4 @@ function getDataFromUrl(url, type, load_callback, other_args) // NEEDS MORE MAGI
 }
 function getJSON(url, load_callback, other_args) { getDataFromUrl(url, 'json',     load_callback, other_args); }
 function getXML(url, load_callback, other_args)  { getDataFromUrl(url, 'default',  load_callback, other_args); }
-function getBlob(url, load_callback, other_args) { getDataFromUrl(url, 'blob',     load_callback, other_args); }
+function getBlob(url, load_callback, other_args) { getDataFromUrl(url, 'blob',     load_callback, other_args); }￿
