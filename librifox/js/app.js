@@ -45,7 +45,7 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   } else {
     console.log('selectedBook.chapters was null');
     getXML("https://librivox.org/rss/" + encodeURIComponent(selectedBook.id), function(xhr) { // get streaming urls from book's rss page
-      var xml      = $(xhr.response),
+      var xml      = $(xhr.response), // Hmm, maybe loop through Items instead? They include titles, enclosures, etc.
         titles   = xml.find("title"),
         chapters = [];
       
@@ -123,7 +123,7 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
     $("#noAvailableDownloads").show();
   }
 });
-$("#audioSource").on("timeupdate", function(){ // On audio change, save new time to localSettings
+$("#audioSource").on("timeupdate", function(){
   var floatSeconds = $("#audioSource").prop('currentTime');
   var hours = +localStorage.getItem("hours");
   var minutes = +localStorage.getItem("minutes");
@@ -140,19 +140,16 @@ $("#audioSource").on("timeupdate", function(){ // On audio change, save new time
     intSeconds -= minutes * 60;
     localStorage.setItem("hours", hours);
     localStorage.setItem("minutes", minutes);
-    localStorage.setItem("seconds", intSeconds);
+    localStorage.setItem("seconds", intSeconds); // Time class needed
   }
 });
 function downloadBook(URL) {
   var id = localStorage.getItem("id");
-  console.log("URL determined to be " + URL);
   var sdcard = navigator.getDeviceStorage("sdcard");
-//    var download = $.get(URL);
   var progress_callback = function (event) {
     if(event.lengthComputable){
       var percentage = (event.loaded / event.total) * 100;
       $("#downloadProgress").val(percentage).slider('refresh');
-      console.log("Downloading... " + percentage + "%");
     }
   }
 
@@ -166,7 +163,6 @@ $("#newSearch").submit(function(event){
   var input = $("#bookSearch").val();
   getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
     if(typeof (xhr.response.books) === 'undefined'){
-      // Show "No Available Books" text! Try making your search simpler.
       $("#noAvailableBooks").show();
     }
     else {
@@ -183,7 +179,7 @@ $("#newSearch").submit(function(event){
     }
     $("#booksList").listview('refresh');
   });
-  return false; // cancels form event
+  return false;
 });
 function getDataFromUrl(url, type, load_callback, other_args) // NEEDS MORE MAGIC STRINGS
 {
