@@ -20,18 +20,51 @@ window.addEventListener('DOMContentLoaded', function() {
 // Add directories for each book, show downloaded files as a list of directories
 
 var bookCache = {};
-var selectedBook;
+var appUIState = new UIState({'bookCache': bookCache});
+
+function Book(args) {
+  this.chapters = args.chapters
+  
+  var  json        = args.json;
+  this.json        = json;
+  this.description = json.description;
+  this.title       = json.title;
+  this.id          = json.id;
+}
+
+function Chapter(args) {
+  title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
+  title_match = title_regex.exec(args.title);
+  this.title  = title_match[1] ? title_match[1] : args.title; // if regex doesn't match, fall back to raw string
+  this.tag    = $(args.tag);
+  this.index  = args.index; // TODO: Add whenever this method is called, return current chapter or get it if not available
+  this.url    = args.url;
+}
+
+function UIState(args) {
+  this.currentBook    = args.currentBook;
+  this.currentChapter = args.currentChapter;
+  this.bookCache      = args.bookCache; // to increase reausability of object - did not hard-code the coupling with our global bookCache
+  
+  this.setCurrentBookById = function(id) {
+    this.currentBook = this.bookCache[id];
+  }
+  this.setCurrentChapterByIndex = function(index) {
+    this.currentChapter = this.currentBook.chapters[index];
+  }
+}
 
 $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
+  var selectedBook = appUIState.currentBook;
   if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
     console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
     return false;
   }
 
   var generate_chapter_list_item = function (chapter) { // is this good coding practice? local method defined inside method
-    var chapterListItem = $('<li chapter-id=' + chapter.index + '><a href="book.html"><h2>' + chapter.title + '</h2></a></li>');
-    chapterListItem.click(function (){
-      selectedBook.currentChapter = $(this).attr("chapter-id");
+    var chapterListItem = $('<li chapter-index=' + chapter.index + '><a href="book.html"><h2>' + chapter.title + '</h2></a></li>');
+    chapterListItem.click(function () {
+      appUIState.setCurrentChapterByIndex($(this).attr("chapter-index"));
     });
     $("#chaptersList").append(chapterListItem);
   }
@@ -60,25 +93,6 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   }
 });
 
-function Book(args) {
-  this.chapters = args.chapters
-  
-  var  json        = args.json;
-  this.json        = json;
-  this.description = json.description;
-  this.title       = json.title;
-  this.id          = json.id;
-  this.currentChapter = undefined;
-}
-function Chapter(args) {
-  title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
-  title_match = title_regex.exec(args.title);
-  this.title  = title_match[1] ? title_match[1] : args.title; // if regex doesn't match, fall back to raw string
-  this.tag    = $(args.tag);
-  this.index  = args.index; // TODO: Add whenever this method is called, return current chapter or get it if not available
-  this.url    = args.url;
-}
-
 // TODO refactor this method (it's the copy and paste version of that other method :P)
 $( document ).on( "pagecreate", "#homeBook", function( event ){
   $(".ui-slider-input").hide();
@@ -92,8 +106,8 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
     var URL = localStorage.getItem("bookURL");
     downloadBook(URL);
   });
-// get book
-  var url = selectedBook.currentChapter.url;
+  // get book
+  var url = appUIState.currentChapter.url;
   $("#audioSource").prop('type', "audio/mpeg");
   $("#audioSource").prop("src", url);
   $("#audioSource").trigger('load');
@@ -172,7 +186,7 @@ $("#newSearch").submit(function(event){
           bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json), which is a little bit icky
           bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
           bookListItem.click(function(){
-            selectedBook = bookCache[$(this).attr("book-id")];
+            appUIState.setCurrentBookById($(this).attr("book-id"));
           });
           $("#booksList").append(bookListItem);
         });
@@ -215,4 +229,4 @@ function getDataFromUrl(url, type, load_callback, other_args) // NEEDS MORE MAGI
 }
 function getJSON(url, load_callback, other_args) { getDataFromUrl(url, 'json',     load_callback, other_args); }
 function getXML(url, load_callback, other_args)  { getDataFromUrl(url, 'default',  load_callback, other_args); }
-function getBlob(url, load_callback, other_args) { getDataFromUrl(url, 'blob',     load_callback, other_args); }￿
+function getBlob(url, load_callback, other_args) { getDataFromUrl(url, 'blob',     load_callback, other_args); }
