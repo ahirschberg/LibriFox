@@ -27,7 +27,7 @@ function Book(args) {
   
   var  json        = args.json;
   this.json        = json;
-  this.description = json.description;
+  this.description = $($.parseHTML(json.description)).text();
   this.title       = json.title;
   this.id          = json.id;
 }
@@ -35,7 +35,7 @@ function Book(args) {
 function Chapter(args) {
   title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
   title_match = title_regex.exec(args.title);
-  this.title  = title_match[1] ? title_match[1] : args.title; // if regex doesn't match, fall back to raw string
+  this.title  = $($.parseHTML(title_match[1] ? title_match[1] : args.title)).text(); // if regex doesn't match, fall back to raw string
   this.tag    = $(args.tag);
   this.index  = args.index; // TODO: Add whenever this method is called, return current chapter or get it if not available
   this.url    = args.url;
