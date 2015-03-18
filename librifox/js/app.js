@@ -79,11 +79,13 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
     console.log('selectedBook.chapters was null');
     getXML("https://librivox.org/rss/" + encodeURIComponent(selectedBook.id), function(xhr) { // get streaming urls from book's rss page
       var xml      = $(xhr.response), // Hmm, maybe loop through Items instead? They include titles, enclosures, etc.
-        titles   = xml.find("title"),
+        $items   = xml.find("item"),
         chapters = [];
       
-      titles.each(function(index, element) {
-        var chapter = new Chapter({'index': index, 'title': element.text, 'tag': element}) // add enclosure and URL
+      $items.each(function(index, element) {
+        var $title = $(element).find("title") // assumes one title and enclosure per item
+        var $enclosure = $(element).find("enclosure");
+        var chapter = new Chapter({'index': chapters.length, 'title': $title.text(), 'url': $enclosure.attr('url')}) // add enclosure and URL
         chapters.push(chapter);
         generate_chapter_list_item(chapter);
       });
