@@ -39,6 +39,7 @@ function Chapter(args) {
   this.tag    = $(args.tag);
   this.index  = args.index; // TODO: Add whenever this method is called, return current chapter or get it if not available
   this.url    = args.url;
+  this.position = 0;
 }
 
 function UIState(args) {
@@ -108,11 +109,16 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
     var URL = localStorage.getItem("bookURL");
     downloadBook(URL);
   });
-  // get book
   var url = appUIState.currentChapter.url;
   $("#audioSource").prop('type', "audio/mpeg");
   $("#audioSource").prop("src", url);
   $("#audioSource").trigger('load');
+  
+  $("#audioSource").on("timeupdate", function(e){
+    var floatSeconds = $("#audioSource").prop('currentTime'); // change to event
+    appUIState.currentChapter.position = floatSeconds;
+    console.log("new time " + appUIState.currentChapter.position);
+  });
 });
 
 $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work only in LibriFox directory
@@ -137,26 +143,6 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
   request.onerror = function(){
     console.log("No data found on SDCard!");
     $("#noAvailableDownloads").show();
-  }
-});
-$("#audioSource").on("timeupdate", function(){
-  var floatSeconds = $("#audioSource").prop('currentTime');
-  var hours = +localStorage.getItem("hours");
-  var minutes = +localStorage.getItem("minutes");
-  var seconds = +localStorage.getItem("seconds");
-  var fullSeconds = (hours * 3600) + (minutes * 60) + seconds;
-  if((floatSeconds <= 5) && (fullSeconds >= 5)){
-    $("#audioSource").prop('currentTime', fullSeconds);
-  }
-  else {
-    var intSeconds = Math.floor(floatSeconds);
-    var hours = Math.floor(intSeconds / 3600);
-    intSeconds -= hours * 3600;
-    var minutes = Math.floor(intSeconds / 60);
-    intSeconds -= minutes * 60;
-    localStorage.setItem("hours", hours);
-    localStorage.setItem("minutes", minutes);
-    localStorage.setItem("seconds", intSeconds); // Time class needed
   }
 });
 function downloadBook(URL) {
