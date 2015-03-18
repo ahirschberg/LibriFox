@@ -117,7 +117,6 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
   $("#audioSource").on("timeupdate", function(e){
     var floatSeconds = $("#audioSource").prop('currentTime'); // change to event
     appUIState.currentChapter.position = floatSeconds;
-    console.log("new time " + appUIState.currentChapter.position);
   });
 });
 
