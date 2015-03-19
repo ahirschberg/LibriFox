@@ -13,6 +13,7 @@ window.addEventListener('DOMContentLoaded', function() {
 //    -Not working with multiple pages
 //    -Search results aren't resetting
 //    -Slider not refreshing on page view
+// COUNT HOW MANY TIMES A BOOK WAS READ
 
 // ------- TODO LIST -------
 // Set audioManager SRC to downloaded file, also add delete buttons to listView -- 
@@ -26,10 +27,10 @@ function Book(args) {
   this.chapters = args.chapters
   
   var  json        = args.json;
-  this.json        = json;
   this.description = $($.parseHTML(json.description)).text();
-  this.title       = json.title;
+  this.title       = $($.parseHTML(json.title)).text();
   this.id          = json.id;
+  this.fullBookURL = json.url_zip_file;
 }
 
 function Chapter(args) {
@@ -98,13 +99,14 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
   $(".ui-slider-input").hide();
   $(".ui-slider-handle").hide(); // Issue here - the page isn't refreshing onLoad. As a result? Slider isn't keeping CSS values
   $("#downloadProgress").val(0).slider("refresh");
+  var id = appUIState.currentBook.id;
   $("#downloadFullBook").click(function(){
-    var URL = localStorage.getItem("download");
-    downloadBook(URL);
+    var url = appUIState.currentBook.fullBookURL;
+    downloadBook(url, id);
   });
   $("#downloadPart").click(function(){
-    var URL = localStorage.getItem("bookURL");
-    downloadBook(URL);
+    var url = appUIState.currentChapter.url;
+    downloadBook(url, id);
   });
   var url = appUIState.currentChapter.url;
   $("#audioSource").prop('type', "audio/mpeg");
@@ -128,9 +130,6 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
       fileListItem.click(function(){
         console.log("You clicked on " + $(this).text());
       });
-      fileListItem.on("taphold", function(){
-        // Open up menu to save, rename, delete
-      })
       $("#downloadedFiles").append(fileListItem);
       this.continue();
     };
@@ -141,8 +140,7 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
     $("#noAvailableDownloads").show();
   }
 });
-function downloadBook(URL) {
-  var id = localStorage.getItem("id");
+function downloadBook(URL, id) {
   var sdcard = navigator.getDeviceStorage("sdcard");
   var progress_callback = function (event) {
     if(event.lengthComputable){
@@ -153,11 +151,11 @@ function downloadBook(URL) {
 
   getBlob(URL, function(xhr) {
     var filename = URL.substring(URL.lastIndexOf('/')+1);
-    sdcard.addNamed(xhr.response, filename);
+    sdcard.addNamed(xhr.response, filename); // folder with id name
   }, {'progress_callback': progress_callback});
 }
 $("#newSearch").submit(function(event){
-  $("#booksList").empty(); // empty the list of any results from previous searches
+  $("#booksList").empty();
   var input = $("#bookSearch").val();
   getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
     if(typeof (xhr.response.books) === 'undefined'){
