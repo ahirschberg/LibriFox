@@ -71,15 +71,13 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   }
   
   if (selectedBook.chapters != null) {
-    console.log('selectedBook.chapters was not null');
     $.each(selectedBook.chapters, function(index, chapter) { 
       generate_chapter_list_item(chapter);
       $("#chaptersList").listview('refresh');
     });
   } else {
-    console.log('selectedBook.chapters was null');
     getXML("https://librivox.org/rss/" + encodeURIComponent(selectedBook.id), function(xhr) { // get streaming urls from book's rss page
-      var xml      = $(xhr.response), // Hmm, maybe loop through Items instead? They include titles, enclosures, etc.
+      var xml      = $(xhr.response),
         $items   = xml.find("item"),
         chapters = [];
       
@@ -96,7 +94,6 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
   }
 });
 
-// TODO refactor this method (it's the copy and paste version of that other method :P)
 $( document ).on( "pagecreate", "#homeBook", function( event ){
   $(".ui-slider-input").hide();
   $(".ui-slider-handle").hide(); // Issue here - the page isn't refreshing onLoad. As a result? Slider isn't keeping CSS values
