@@ -1,16 +1,10 @@
 window.addEventListener('DOMContentLoaded', function() {
   'use strict';
   var translate = navigator.mozL10n.get;
-  var hasLoaded = localStorage.getItem("default");
-  if(Boolean(localStorage.getItem("default")) != true){
-    localStorage.setItem("default", "true"); // Set default settings
-    localStorage.setItem("directoryCreated", "false");
-  }
 });
 
 // Bugs:
 //    -Not loading when spaces are used
-//    -Not working with multiple pages
 //    -Search results aren't resetting
 //    -Slider not refreshing on page view
 // COUNT HOW MANY TIMES A BOOK WAS READ
@@ -77,15 +71,15 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
       $("#chaptersList").listview('refresh');
     });
   } else {
-    getXML("https://librivox.org/rss/" + encodeURIComponent(selectedBook.id), function(xhr) { // get streaming urls from book's rss page
+    getXML("https://librivox.org/rss/" + encodeURIComponent(selectedBook.id), function(xhr) {
       var xml      = $(xhr.response),
         $items   = xml.find("item"),
         chapters = [];
       
       $items.each(function(index, element) {
-        var $title = $(element).find("title") // assumes one title and enclosure per item
+        var $title = $(element).find("title")
         var $enclosure = $(element).find("enclosure");
-        var chapter = new Chapter({'index': chapters.length, 'title': $title.text(), 'url': $enclosure.attr('url')}) // add enclosure and URL
+        var chapter = new Chapter({'index': chapters.length, 'title': $title.text(), 'url': $enclosure.attr('url')})
         chapters.push(chapter);
         generate_chapter_list_item(chapter);
       });
@@ -151,21 +145,21 @@ function downloadBook(URL, id) {
 
   getBlob(URL, function(xhr) {
     var filename = URL.substring(URL.lastIndexOf('/')+1);
-    sdcard.addNamed(xhr.response, filename); // folder with id name
+    sdcard.addNamed(xhr.response, filename); // TODO folder with id name ie /librifox/id/
   }, {'progress_callback': progress_callback});
 }
 $("#newSearch").submit(function(event){
   $("#booksList").empty();
   var input = $("#bookSearch").val();
+  console.log(encodeURIComponent(input));
   getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
     if(typeof (xhr.response.books) === 'undefined'){
       $("#noAvailableBooks").show();
     }
     else {
-      console.log("librivox responded with " + xhr.response.books.length + " book(s) and status " + xhr.status);
         xhr.response.books.forEach(function(entry) {
           var book = new Book({'json': entry});
-          bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json), which is a little bit icky
+          bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json)
           bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
           bookListItem.click(function(){
             appUIState.setCurrentBookById($(this).attr("book-id"));

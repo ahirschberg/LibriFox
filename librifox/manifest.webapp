@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "LibriFox",
   "description": "A port of the LibriVox app for Firefox OS",
   "launch_path": "/index.html",
@@ -11,7 +11,7 @@
   },
   "developer": {
     "name": "Finn Cardiff and Alex Hirschberg",
-    "url": "http://students.gctaa.net"
+    "url": "http://arltechinnovation.us"
   },
   "type": "privileged",
   "permissions": {
