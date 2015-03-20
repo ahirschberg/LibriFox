@@ -25,13 +25,8 @@ function Book(args) {
   this.chapters = args.chapters
   
   var  json        = args.json;
-<<<<<<< HEAD
   this.description = stripHTMLTags(json.description);
   this.title       = stripHTMLTags(json.title);
-=======
-  this.description = $($.parseHTML(json.description)).text();
-  this.title       = $($.parseHTML(json.title)).text();
->>>>>>> c9934c55b875f576c3ef5e551ce1d4002aa3af97
   this.id          = json.id;
   this.fullBookURL = json.url_zip_file;
 }
@@ -164,20 +159,21 @@ $("#newSearch").submit(function(event){
       $("#noAvailableBooks").show();
     }
     else {
-        xhr.response.books.forEach(function(entry) {
-          var book = new Book({'json': entry});
-          bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json)
-          bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
-          bookListItem.click(function(){
-            appUIState.setCurrentBookById($(this).attr("book-id"));
-          });
-          $("#booksList").append(bookListItem);
+      xhr.response.books.forEach(function(entry) {
+        var book = new Book({'json': entry});
+        bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json)
+        bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
+        bookListItem.click(function(){
+          appUIState.setCurrentBookById($(this).attr("book-id"));
         });
+        $("#booksList").append(bookListItem);
+      });
     }
     $("#booksList").listview('refresh');
   });
   return false;
 });
+
 function getDataFromUrl(url, type, load_callback, other_args) // NEEDS MORE MAGIC STRINGS
 {
   other_args = other_args || {};
