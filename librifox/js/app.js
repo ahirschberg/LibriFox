@@ -22,21 +22,23 @@ window.addEventListener('DOMContentLoaded', function() {
 var bookCache = {};
 var appUIState = new UIState({'bookCache': bookCache});
 
+function stripHTMLTags(str) {
+  return str.replace(/<(?:.|\n)*?>/gm, '');
+}
+
 function Book(args) {
   this.chapters = args.chapters
   
   var  json        = args.json;
-  this.json        = json;
-  this.description = $($.parseHTML(json.description)).text();
-  this.title       = json.title;
+  this.description = stripHTMLTags(json.description);
+  this.title       = stripHTMLTags(json.title);
   this.id          = json.id;
 }
 
 function Chapter(args) {
   title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
   title_match = title_regex.exec(args.title);
-  this.title  = $($.parseHTML(title_match[1] ? title_match[1] : args.title)).text(); // if regex doesn't match, fall back to raw string
-  this.tag    = $(args.tag);
+  this.title  = stripHTMLTags(title_match[1] ? title_match[1] : args.title); // if regex doesn't match, fall back to raw string
   this.index  = args.index; // TODO: Add whenever this method is called, return current chapter or get it if not available
   this.url    = args.url;
   this.position = 0;
@@ -111,9 +113,8 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
   $("#audioSource").prop("src", url);
   $("#audioSource").trigger('load');
   
-  $("#audioSource").on("timeupdate", function(e){
-    var floatSeconds = $("#audioSource").prop('currentTime'); // change to event
-    appUIState.currentChapter.position = floatSeconds;
+  $("#audioSource").on("timeupdate", function () {
+    appUIState.currentChapter.position = this.currentTime;
   });
 });
 
