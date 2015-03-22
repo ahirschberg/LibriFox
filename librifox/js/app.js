@@ -3,17 +3,6 @@ window.addEventListener('DOMContentLoaded', function() {
   var translate = navigator.mozL10n.get;
 });
 
-// Bugs:
-//    -Not loading when spaces are used
-//    -Search results aren't resetting
-//    -Slider not refreshing on page view
-// COUNT HOW MANY TIMES A BOOK WAS READ
-
-// ------- TODO LIST -------
-// Set audioManager SRC to downloaded file, also add delete buttons to listView -- 
-// Delete is the .delete function of the DeviceStorage API
-// Add directories for each book, show downloaded files as a list of directories
-
 var bookCache = {};
 var appUIState = new UIState({'bookCache': bookCache});
 
@@ -95,7 +84,7 @@ $( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
 $( document ).on( "pagecreate", "#homeBook", function( event ){
   $(".ui-slider-input").hide();
   $(".ui-slider-handle").hide(); // Issue here - the page isn't refreshing onLoad. As a result? Slider isn't keeping CSS values
-  $("#downloadProgress").val(0).slider("refresh");
+  $("#downloadProgress").val(0).slider("refresh"); // This and the two lines before can be removed once fixed
   var id = appUIState.currentBook.id;
   $("#downloadFullBook").click(function(){
     var url = appUIState.currentBook.fullBookURL;
@@ -108,7 +97,7 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
   var url = appUIState.currentChapter.url;
   $("#audioSource").prop('type', "audio/mpeg");
   $("#audioSource").prop("src", url);
-  $("#audioSource").trigger('load');
+  $("#audioSource").trigger('load'); // Probably a better way to do this... loadAudio(src) method?
   
   $("#audioSource").on("timeupdate", function () {
     appUIState.currentChapter.position = this.currentTime;
@@ -120,14 +109,11 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
   var request = sdcard.enumerate();
   request.onsuccess = function(){
     if(this.result){
-      fileListItem = $('<li><a data-icon="delete">' + this.result.name + '</a></li>');     
-// Options and menus to display info?
-//<select data-native-menu="false" name="fileSelect"><option data-placeholder="true" value="main-name">Name of file</option></select>      
+      fileListItem = $('<li><a data-icon="delete">' + this.result.name + '</a></li>');  
       fileListItem.click(function(){
-        console.log("You clicked on " + $(this).text());
-      });
-      $("#downloadedFiles").append(fileListItem);
-      this.continue();
+    });
+    $("#downloadedFiles").append(fileListItem);
+    this.continue();
     };
     $("#downloadedFiles").listview('refresh');
   };
