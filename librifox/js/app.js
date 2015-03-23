@@ -142,7 +142,7 @@ $("#newSearch").submit(function(event){
   var input = $("#bookSearch").val();
   console.log(encodeURIComponent(input));
   getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
-    if(typeof (xhr.response.books) === 'undefined'){
+    if (!xhr.response.books) {
       $("#noAvailableBooks").show();
     }
     else {
