@@ -1,6 +1,7 @@
 window.addEventListener('DOMContentLoaded', function() {
   'use strict';
   var translate = navigator.mozL10n.get;
+  console.log(stripHTMLTags("<b>The left angle bracket, also known as <, is often used as a less than sign. On the other hand, the right angle bracket, known as >, is often used as a greater than sign.</b>"));
 });
 
 var bookCache = {};
