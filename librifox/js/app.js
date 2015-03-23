@@ -111,14 +111,14 @@ $( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work onl
     if(this.result){
       fileListItem = $('<li><a data-icon="delete">' + this.result.name + '</a></li>');  
       fileListItem.click(function(){
-    });
-    $("#downloadedFiles").append(fileListItem);
-    this.continue();
+        // play book... change page and set audio src to the file
+      });
+      $("#downloadedFiles").append(fileListItem);
+      this.continue();
     };
     $("#downloadedFiles").listview('refresh');
   };
   request.onerror = function(){
-    console.log("No data found on SDCard!");
     $("#noAvailableDownloads").show();
   }
 });
@@ -139,7 +139,6 @@ function downloadBook(URL, id) {
 $("#newSearch").submit(function(event){
   $("#booksList").empty();
   var input = $("#bookSearch").val();
-  console.log(encodeURIComponent(input));
   getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
     if (!xhr.response.books) {
       $("#noAvailableBooks").show();
@@ -155,7 +154,7 @@ $("#newSearch").submit(function(event){
         $("#booksList").append(bookListItem);
       });
     }
-    $("#booksList").listview('refresh');
+    $("#booksList").listview('refresh'); // now add non-exact matches, author search, etc.
   });
   return false;
 });
