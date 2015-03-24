@@ -11,7 +11,7 @@ function stripHTMLTags(str) {
 }
 
 function Book(args) {
-  this.chapters = args.chapters
+  this.chapters = args.chapters;
   
   var  json        = args.json;
   this.description = stripHTMLTags(json.description);
