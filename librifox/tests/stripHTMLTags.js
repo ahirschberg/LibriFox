@@ -23,7 +23,7 @@ describe('Book()', function(){
       assert.equal(true, (Book(BOOKS_JSON) instanceof Book));
     })
     it('should create an id field for the book, if available', function(){
-      
+      assert.equal("59", (Book(BOOKS_JSON).id);
     })
     it('should create a title field for the book, if available, with stripped HTML tags', function(){
       
