@@ -1,26 +1,26 @@
-var BOOKS_JSON =
-{"books":[{
-	"id":"59",
-	"title":"Adventures of Huckleberry Finn",
-	"description":"The Adventures of Huckleberry Finn is a novel by Mark Twain",
-  "url-zip-file":"google.com/coolstuff.zip",
-}]}
+// Mimic LibriVox JSON response
+var BOOKS_JSON = {
+    "books":[{
+       "id":"59", 
+       "title":"Adventures of Huckleberry Finn", 
+       "description": "The Adventures of Huckleberry Finn is a novel by Mark Twain",
+       "url-zip-file":"google.com/coolstuff.zip"
+   }]
+}
+
 describe('#stripHTMLTags()', function() {
   it('removes all angle bracket pairs and enclosing strings', function() {
     assert.equal('no html tags.', stripHTMLTags('<html>no<em> html</em><garbage\n-tag> tags.'));
   })
-  it('doesnt remove brackets if only one angle bracket is used', function(){
-    assert.equal('Look, a left angle bracket! <.', stripHTMLTags('Look, a left angle bracket! <.'));
-  })
-  it('removes text if it is between a left and right angle bracket', function(){
-    assert.equal('The following text is in angle brackets: ', stripHTMLTags('The following text is in angle brackets: <test>'))
+  it('only removes text enclosed in brackets', function(){
+    assert.equal('> Look, left and right angle brackets! <.', stripHTMLTags('> Look, left and right angle brackets! <.'));
   })
 });
 
 describe('Book()', function(){
   it('should create a new book with field info', function(){
     it('should create an instance of Book', function(){
-      assert.equal(true, (Book(BOOKS_JSON) instanceof Book));
+      assert.equal(true, (Book(BOOKS_JSON) instanceof Book)); // There must a cleaner way to do this but I don't know what it is :(
     })
     it('should create an id field for the book, if available', function(){
       assert.equal("59", (Book(BOOKS_JSON).id);
@@ -39,11 +39,3 @@ describe('Book()', function(){
     })
   })
 })
-// Test JSON below
-/*{"books":[{
-	"id":"59",
-	"title":"Adventures of Huckleberry Finn",
-	"description":"The Adventures of Huckleberry Finn is a novel by Mark Twain",
-  "url-zip-file":"google.com/coolstuff.zip",
-  }]}*/
-	
