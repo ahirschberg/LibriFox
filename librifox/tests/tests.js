@@ -23,19 +23,19 @@ describe('Book()', function(){
       assert.equal(true, (Book(BOOKS_JSON) instanceof Book)); // There must a cleaner way to do this but I don't know what it is :(
     })
     it('should create an id field for the book, if available', function(){
-      assert.equal("59", (Book(BOOKS_JSON).id);
+      assert.equal("59", Book(BOOKS_JSON).id);
     })
     it('should create a title field for the book, if available, with stripped HTML tags', function(){
-      
+      assert.equal("Adventures of Huckleberry Finn", Book(BOOKS_JSON).title);
     })
     it('should create a description field for the book, if available, with stripped HTML tags', function(){
-      
+      assert.equal("The Adventures of Huckleberry Finn is a novel by Mark Twain", Book(BOOKS_JSON).description);
     })
     it('should create an object for a total list of JSON for the book, if available', function(){
-      
+      assert.equal("test", Book(BOOKS_JSON).json); // fix this line
     })
     it('should create an object for the zip file url for the book, if available', function(){
-      
+      assert.equal("google.com/coolstuff.zip", Book(BOOKS_JSON).fullBookURL);
     })
   })
 })
