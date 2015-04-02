@@ -1,4 +1,4 @@
-window.addEventListener('DOMContentLoaded', function() {
+window.addEventListener('DOMContentLoaded', function () {
   'use strict';
   var translate = navigator.mozL10n.get;
 });
@@ -21,9 +21,9 @@ function Book(args) {
 }
 
 function Chapter(args) {
-  title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
-  title_match = title_regex.exec(args.title);
-  this.title  = stripHTMLTags(title_match[1] ? title_match[1] : args.title); // if regex doesn't match, fall back to raw string
+  var title_regex = /^<!\[CDATA\[(.*)\]\]>$/;
+  var title_match = title_regex.exec(args.title);
+  this.title  = stripHTMLTags(title_match[1] || args.title); // if regex doesn't match, fall back to raw string
   this.index  = args.index; // TODO: Add whenever this method is called, return current chapter or get it if not available
   this.url    = args.url;
   this.position = 0;
@@ -34,59 +34,77 @@ function UIState(args) {
   this.currentChapter = args.currentChapter;
   this.bookCache      = args.bookCache; // to increase reausability of object - did not hard-code the coupling with our global bookCache
   
-  this.setCurrentBookById = function(id) {
+  this.setCurrentBookById = function (id) {
     this.currentBook = this.bookCache[id];
-  }
-  this.setCurrentChapterByIndex = function(index) {
+  };
+  this.setCurrentChapterByIndex = function (index) {
     this.currentChapter = this.currentBook.chapters[index];
-  }
+  };
 }
 
-$( document ).on( "pagecreate", "#chaptersListPage", function( event ) {
-  var selectedBook = appUIState.currentBook;
-  if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
-    console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
-    return false;
-  }
+function ChaptersListPageGenerator() {
+  var that = this; // is this just an accepted javascript pattern?
+  
+  this.generatePage = function (book) {
+    if (!book.chapters) {
+      that._showLocalChapters(book.chapters);
+    } else {
+      that._getChaptersFromFeed(book.id, function (chapters) {
+        book.chapters = chapters;
+        that._showLocalChapters(book.chapters);
+      });
+    }
+  };
 
-  var generate_chapter_list_item = function (chapter) { // is this good coding practice? local method defined inside method
+  this._showLocalChapters = function (chapters) {
+    $.each(chapters, function (index, chapter) {
+      that._generateChapterListItem(chapter);
+    });
+    $("#chaptersList").listview('refresh');
+  };
+
+  this._generateChapterListItem = function (chapter) {
     var chapterListItem = $('<li chapter-index=' + chapter.index + '><a href="book.html"><h2>' + chapter.title + '</h2></a></li>');
     chapterListItem.click(function () {
       appUIState.setCurrentChapterByIndex($(this).attr("chapter-index"));
     });
     $("#chaptersList").append(chapterListItem);
-  }
-  
-  if (selectedBook.chapters != null) {
-    $.each(selectedBook.chapters, function(index, chapter) { 
-      generate_chapter_list_item(chapter);
-      $("#chaptersList").listview('refresh');
-    });
-  } else {
-    getXML("https://librivox.org/rss/" + encodeURIComponent(selectedBook.id), function(xhr) {
-      var xml      = $(xhr.response),
-        $items   = xml.find("item"),
-        chapters = [];
+  };
       
-      $items.each(function(index, element) {
-        var $title = $(element).find("title")
+  this._getChaptersFromFeed = function (book_id, callback_func) {
+    getXML("https://librivox.org/rss/" + encodeURIComponent(book_id), function(xhr) {
+      var xml      = $(xhr.response),
+        $items     = xml.find("item"),
+        chapters   = [];
+      
+      $items.each(function (index, element) {
+        var $title = $(element).find("title");
         var $enclosure = $(element).find("enclosure");
-        var chapter = new Chapter({'index': chapters.length, 'title': $title.text(), 'url': $enclosure.attr('url')})
+        var chapter = new Chapter({'index': chapters.length, 'title': $title.text(), 'url': $enclosure.attr('url')});
         chapters.push(chapter);
-        generate_chapter_list_item(chapter);
       });
-      selectedBook.chapters = chapters;
-      $("#chaptersList").listview('refresh');
+      callback_func(chapters);
     });
+  };
+}
+var chaptersListGen = new ChaptersListPageGenerator();
+
+
+$( document ).on( "pagecreate", "#chaptersListPage", function (event) {
+  var selectedBook = appUIState.currentBook;
+  if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
+    console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
+    return false;
   }
+  chaptersListGen.generatePage(selectedBook);
 });
 
-$( document ).on( "pagecreate", "#homeBook", function( event ){
+$( document ).on( "pagecreate", "#homeBook", function (event){
   $(".ui-slider-input").hide();
   $(".ui-slider-handle").hide(); // Issue here - the page isn't refreshing onLoad. As a result? Slider isn't keeping CSS values
   $("#downloadProgress").val(0).slider("refresh"); // This and the two lines before can be removed once fixed
   var id = appUIState.currentBook.id;
-  $("#downloadFullBook").click(function(){
+  $("#downloadFullBook").click(function () {
     var url = appUIState.currentBook.fullBookURL;
     downloadBook(url, id);
   });
@@ -104,21 +122,21 @@ $( document ).on( "pagecreate", "#homeBook", function( event ){
   });
 });
 
-$( document ).on( "pagecreate", "#homeFileManager", function(){ // TODO work only in LibriFox directory
+$( document ).on( "pagecreate", "#homeFileManager", function () { // TODO work only in LibriFox directory
   var sdcard = navigator.getDeviceStorage('sdcard');
   var request = sdcard.enumerate();
-  request.onsuccess = function(){
-    if(this.result){
+  request.onsuccess = function () {
+    if (this.result) {
       fileListItem = $('<li><a data-icon="delete">' + this.result.name + '</a></li>');  
-      fileListItem.click(function(){
+      fileListItem.click(function () {
         // play book... change page and set audio src to the file
       });
       $("#downloadedFiles").append(fileListItem);
       this.continue();
-    };
+    }
     $("#downloadedFiles").listview('refresh');
   };
-  request.onerror = function(){
+  request.onerror = function () {
     $("#noAvailableDownloads").show();
   }
 });
