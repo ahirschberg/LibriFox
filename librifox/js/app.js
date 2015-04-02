@@ -43,27 +43,26 @@ function UIState(args) {
 }
 
 function ChaptersListPageGenerator() {
-  var that = this; // is this just an accepted javascript pattern?
-  
+
   this.generatePage = function (book) {
-    if (!book.chapters) {
-      that._showLocalChapters(book.chapters);
+    if (book.chapters) {
+      showLocalChapters(book.chapters);
     } else {
-      that._getChaptersFromFeed(book.id, function (chapters) {
+      getChaptersFromFeed(book.id, function (chapters) {
         book.chapters = chapters;
-        that._showLocalChapters(book.chapters);
+        showLocalChapters(book.chapters);
       });
     }
   };
 
-  this._showLocalChapters = function (chapters) {
+  function showLocalChapters(chapters) {
     $.each(chapters, function (index, chapter) {
-      that._generateChapterListItem(chapter);
+      generateChapterListItem(chapter);
     });
     $("#chaptersList").listview('refresh');
   };
 
-  this._generateChapterListItem = function (chapter) {
+  function generateChapterListItem(chapter) {
     var chapterListItem = $('<li chapter-index=' + chapter.index + '><a href="book.html"><h2>' + chapter.title + '</h2></a></li>');
     chapterListItem.click(function () {
       appUIState.setCurrentChapterByIndex($(this).attr("chapter-index"));
@@ -71,7 +70,7 @@ function ChaptersListPageGenerator() {
     $("#chaptersList").append(chapterListItem);
   };
       
-  this._getChaptersFromFeed = function (book_id, callback_func) {
+  function getChaptersFromFeed(book_id, callback_func) {
     getXML("https://librivox.org/rss/" + encodeURIComponent(book_id), function(xhr) {
       var xml      = $(xhr.response),
         $items     = xml.find("item"),
