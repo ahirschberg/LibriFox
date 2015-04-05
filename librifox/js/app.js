@@ -4,7 +4,7 @@ window.addEventListener('DOMContentLoaded', function () {
 });
 
 var bookCache = {};
-var appUIState = new UIState({'bookCache': bookCache});
+var httpRequestHandler = new HttpRequestHandler();
 
 function stripHTMLTags(str) {
   return str.replace(/<(?:.|\n)*?>/gm, '');
@@ -41,8 +41,12 @@ function UIState(args) {
     this.currentChapter = this.currentBook.chapters[index];
   };
 }
+var appUIState = new UIState({'bookCache': bookCache});
 
-function ChaptersListPageGenerator() {
+function ChaptersListPageGenerator(args) {
+  var args = args || {};
+  var httpRequestHandler = args.httpRequestHandler;
+  var selector = args.selector;
 
   this.generatePage = function (book) {
     if (book.chapters) {
@@ -59,7 +63,7 @@ function ChaptersListPageGenerator() {
     $.each(chapters, function (index, chapter) {
       generateChapterListItem(chapter);
     });
-    $("#chaptersList").listview('refresh');
+    $(selector).listview('refresh');
   };
 
   function generateChapterListItem(chapter) {
@@ -67,11 +71,11 @@ function ChaptersListPageGenerator() {
     chapterListItem.click(function () {
       appUIState.setCurrentChapterByIndex($(this).attr("chapter-index"));
     });
-    $("#chaptersList").append(chapterListItem);
+    $(selector).append(chapterListItem);
   };
       
   function getChaptersFromFeed(book_id, callback_func) {
-    getXML("https://librivox.org/rss/" + encodeURIComponent(book_id), function(xhr) {
+    httpRequestHandler.getXML("https://librivox.org/rss/" + encodeURIComponent(book_id), function(xhr) {
       var xml      = $(xhr.response),
         $items     = xml.find("item"),
         chapters   = [];
@@ -86,7 +90,7 @@ function ChaptersListPageGenerator() {
     });
   };
 }
-var chaptersListGen = new ChaptersListPageGenerator();
+var chaptersListGen = new ChaptersListPageGenerator({'httpRequestHandler': httpRequestHandler, 'selector': '#chaptersList'});
 
 
 $( document ).on( "pagecreate", "#chaptersListPage", function (event) {
@@ -148,7 +152,7 @@ function downloadBook(URL, id) {
     }
   }
 
-  getBlob(URL, function(xhr) {
+  httpRequestHandler.getBlob(URL, function(xhr) {
     var filename = URL.substring(URL.lastIndexOf('/')+1);
     sdcard.addNamed(xhr.response, filename); // TODO folder with id name ie /librifox/id/
   }, {'progress_callback': progress_callback});
@@ -156,7 +160,7 @@ function downloadBook(URL, id) {
 $("#newSearch").submit(function(event){
   $("#booksList").empty();
   var input = $("#bookSearch").val();
-  getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
+  httpRequestHandler.getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
     if (!xhr.response.books) {
       $("#noAvailableBooks").show();
     }
@@ -176,38 +180,43 @@ $("#newSearch").submit(function(event){
   return false;
 });
 
-function getDataFromUrl(url, type, load_callback, other_args) // NEEDS MORE MAGIC STRINGS
-{
-  other_args = other_args || {};
-  var xhr = new XMLHttpRequest({ mozSystem: true });
+function HttpRequestHandler() {
+  var that = this;
+  
+  this.getDataFromUrl = function (url, type, load_callback, other_args) // NEEDS MORE MAGIC STRINGS
+  {
+    other_args = other_args || {};
+    var xhr = new XMLHttpRequest({ mozSystem: true });
 
-  if (xhr.overrideMimeType && type == 'json') {
-    xhr.overrideMimeType('application/json');
+    if (xhr.overrideMimeType && type == 'json') {
+      xhr.overrideMimeType('application/json');
+    }
+
+    other_args.error_callback = other_args.error_callback || function(e) {
+      console.log("error loading json from url " + url);
+      console.log(e);
+    }
+    other_args.timeout_callback = other_args.timeout_callback || function(e) {
+      console.log("timeout loading json from url " + url);
+      console.log(e);
+    }
+
+    xhr.addEventListener('load', function(e) {
+      load_callback(xhr,e);
+    });
+
+    xhr.addEventListener('error', other_args.error_callback);
+    xhr.addEventListener('timeout', other_args.timeout_callback);
+    xhr.addEventListener('progress', other_args.progress_callback);
+  //  xhr.upload.addEventListener("load", transferComplete, false);
+  //  xhr.upload.addEventListener("error", transferFailed, false);
+  //  xhr.upload.addEventListener("abort", transferCanceled, false);
+    xhr.open('GET', url);
+    if (type != 'default') { xhr.responseType = type; }
+    xhr.send();
   }
-
-  other_args.error_callback = other_args.error_callback || function(e) {
-    console.log("error loading json from url " + url);
-    console.log(e);
-  }
-  other_args.timeout_callback = other_args.timeout_callback || function(e) {
-    console.log("timeout loading json from url " + url);
-    console.log(e);
-  }
-
-  xhr.addEventListener('load', function(e) {
-    load_callback(xhr,e);
-  });
-
-  xhr.addEventListener('error', other_args.error_callback);
-  xhr.addEventListener('timeout', other_args.timeout_callback);
-  xhr.addEventListener('progress', other_args.progress_callback);
-//  xhr.upload.addEventListener("load", transferComplete, false);
-//  xhr.upload.addEventListener("error", transferFailed, false);
-//  xhr.upload.addEventListener("abort", transferCanceled, false);
-  xhr.open('GET', url);
-  if (type != 'default') { xhr.responseType = type; }
-  xhr.send();
+  
+  this.getJSON = function (url, load_callback, other_args) { that.getDataFromUrl(url, 'json',     load_callback, other_args); };
+  this.getXML  = function (url, load_callback, other_args) { that.getDataFromUrl(url, 'default',  load_callback, other_args); };
+  this.getBlob = function (url, load_callback, other_args) { that.getDataFromUrl(url, 'blob',     load_callback, other_args); };
 }
-function getJSON(url, load_callback, other_args) { getDataFromUrl(url, 'json',     load_callback, other_args); }
-function getXML(url, load_callback, other_args)  { getDataFromUrl(url, 'default',  load_callback, other_args); }
-function getBlob(url, load_callback, other_args) { getDataFromUrl(url, 'blob',     load_callback, other_args); }
