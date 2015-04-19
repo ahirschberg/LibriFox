@@ -1,6 +1,5 @@
 # LibriFox
-
-LibriFox is a port of LibriVox for FirefoxOS.
+LibriFox is a Firefox OS audio book player for LibriVox audio books.
 
 Current Features:
 -Fully loading audiobook search
