@@ -90,9 +90,8 @@ function ChaptersListPageGenerator(args) {
     });
   };
 }
+
 var chaptersListGen = new ChaptersListPageGenerator({'httpRequestHandler': httpRequestHandler, 'selector': '#chaptersList'});
-
-
 $( document ).on( "pagecreate", "#chaptersListPage", function (event) {
   var selectedBook = appUIState.currentBook;
   if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
@@ -157,26 +156,49 @@ function downloadBook(URL, id) {
     sdcard.addNamed(xhr.response, filename); // TODO folder with id name ie /librifox/id/
   }, {'progress_callback': progress_callback});
 }
+
+function SearchResltsPageGenerator(args) {
+  var args = args || {};
+  var httpRequestHandler = args.httpRequestHandler;
+  var selector = args.selector; // #booksList
+
+  this.generatePage = function (search_string) {
+    clearResultsElement();
+    getSearchJSON(search_string, function (books) {
+      if (books) {
+        books.forEach(function(book_entry) {
+          var book = new Book({'json': book_entry});
+          bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json)
+          bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' 
+              + book.title + '</h2><p>' + book.description + '</p></a></li>');
+          bookListItem.click(function(){
+            appUIState.setCurrentBookById($(this).attr("book-id"));
+          });
+          $(selector).append(bookListItem);
+        });
+        $(selector).listview('refresh');
+      } else {
+        $(selector).append('<p>No books found, try simplifying your search.<br/>' + 
+          'The LibriVox search API is not very good, so we apologize for the inconvenience.</p>');
+      }
+    });
+  }
+
+  function getSearchJSON(search_string, callback_func) {
+    httpRequestHandler.getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(search_string) + "?&format=json",function(xhr) {
+      callback_func(xhr.response.books);
+    });
+  }
+
+  function clearResultsElement() { $(selector).empty(); }
+}
+var searchResultsPageGenerator = 
+  new SearchResltsPageGenerator({'httpRequestHandler': httpRequestHandler, 'selector':'#booksList'});
+
 $("#newSearch").submit(function(event){
   $("#booksList").empty();
   var input = $("#bookSearch").val();
-  httpRequestHandler.getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(input) + "?&format=json",function(xhr) {
-    if (!xhr.response.books) {
-      $("#noAvailableBooks").show();
-    }
-    else {
-      xhr.response.books.forEach(function(entry) {
-        var book = new Book({'json': entry});
-        bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json)
-        bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
-        bookListItem.click(function(){
-          appUIState.setCurrentBookById($(this).attr("book-id"));
-        });
-        $("#booksList").append(bookListItem);
-      });
-    }
-    $("#booksList").listview('refresh'); // now add non-exact matches, author search, etc.
-  });
+  searchResultsPageGenerator.generatePage(input);
   return false;
 });
 

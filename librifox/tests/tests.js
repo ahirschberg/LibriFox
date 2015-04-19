@@ -59,15 +59,96 @@ describe('ChaptersListPageGenerator()', function() {
       cpg.generatePage(new Book({'json':BOOK_JSON}));
     });
 
-    it('appends chapter elements to an unordered list', function () {
+    it('appends elements with chapter titles to selected parent element', function () {
       expect($('#chapters-list').children().length).equal(2);
       expect($('#chapters-list').children()[1].textContent).match(/^Chapter 02$/);
     });
-    it('adds chapter-index attributes to each list item', function () {
-      $('#chapters-list').children().each( function (i) {
-        expect($(this).attr('chapter-index')).equal(i + ''); // need way to do a == with expect() -- expect().equal is ===
+    it('adds chapter-index attributes to each element in the selected parent', function () {
+      $('#chapters-list').children().each(function (i) {
+        expect($(this).attr('chapter-index')).equal(i + '');
       });
     });
   });
   // Should we test private methods?  I don't think it's necessary.
 });
+
+describe('SearchResltsPageGenerator()', function () {
+  describe('#generatePage()', function () {
+    var spg, 
+      bsrSelector, 
+      books_response;
+
+    before(function () {
+      bsrSelector = '#bookSearchResults';
+
+      var ul = $('<ul data-role="listview" id="bookSearchResults"></ul>');
+      ul.appendTo('body');
+      ul.listview();
+
+      books_response = [BOOK_JSON,{
+          'id': 1234,
+          'title': 'placeholder book',
+          'description': 'this is a description'
+        }];
+
+      function StubHttpRequestHandler() {
+        this.getJSON = function (url, load_callback, other_args) {
+          var response_arr = (url.match(/\^NORESULT\?/) ? undefined : books_response);
+          call_callback(load_callback, response_arr);
+        }
+
+        function call_callback(callback, response) {
+          callback({'response': {'books': response}}); // simulate LibriVox JSON title search response
+        }
+      }
+
+      spg = new SearchResltsPageGenerator({'httpRequestHandler': new StubHttpRequestHandler(), 'selector': bsrSelector});
+    });
+
+    afterEach(function () {
+      $(bsrSelector).empty(); // I think Mocha / Karma might also clear #bSR, commenting this line has no effect
+    });
+
+    it('appends elements containing book results to selected parent element', function () {
+      spg.generatePage('abc');
+      expect($(bsrSelector).children().length).equal(2);
+    });
+
+    it('populates elements with book titles and descriptions', function () {
+      spg.generatePage('abc');
+
+      var secondBookResult = $(bsrSelector).children()[1];
+      var secondBookTitle  = $(secondBookResult).find('h2').text(); // these are implementation details, should the test just check whether the text exists?
+      var secondBookDesc   = $(secondBookResult).find('p').text();
+
+      expect(secondBookTitle).equal('placeholder book');
+      expect(secondBookDesc).equal('this is a description');
+    });
+
+    it('adds book-id attributes to each element in the selected parent', function () {
+      spg.generatePage('abc');
+
+      $('#bookSearchResults').children().each(function (i) {
+        expect($(this).attr('book-id')).equal(books_response[i].id + ''); // no == #equals() in expect()?? Why?
+      });
+    });
+
+    it('displays a message if no books are found', function () {
+      spg.generatePage('NORESULT');
+
+      expect($(bsrSelector).html()).match(/no books found/i);
+    });
+
+    it('clears results from a previous search before appending new elements', function () {
+      spg.generatePage('abc');
+      spg.generatePage('def');
+
+      expect($(bsrSelector).children().length).to.equal(2);
+
+      spg.generatePage('NORESULT');
+      spg.generatePage('abc');
+
+      expect($(bsrSelector).text()).not.match(/no books found/i);
+    });
+  });
+})
