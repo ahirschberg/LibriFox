@@ -16,3 +16,17 @@ p {
   font-size: inherit;
 }
 
+.progressBar {
+  width: 90%;
+  height: 25px;
+  padding: 0px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.progressBarSlider {
+  background-color: #F00;
+  border-radius: 2px;
+  width: 0;
+  height: inherit;
+}

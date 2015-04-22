@@ -1,4 +1,4 @@
-// Mimic LibriVox JSON response
+// Setup sample data for tests
 var BOOK_JSON = {
     "id": "59",
     "title": "Adventures of Huckleberry Finn",
@@ -15,6 +15,7 @@ var BOOK_XML =
       '</item>' +
     '</channel> </rss>';
 
+// Begin testing
 describe('#stripHTMLTags()', function () {
   it('removes all angle bracket pairs and enclosing strings', function () {
     expect( stripHTMLTags('<html>no<em> html</em><garbage\n-tag> tags.') ).equal('no html tags.');
@@ -77,6 +78,9 @@ describe('SearchResltsPageGenerator()', function () {
     var spg, 
       bsrSelector, 
       books_response;
+    
+    var httpReqUrl; 
+
 
     before(function () {
       bsrSelector = '#bookSearchResults';
@@ -90,15 +94,14 @@ describe('SearchResltsPageGenerator()', function () {
           'title': 'placeholder book',
           'description': 'this is a description'
         }];
-
-      function StubHttpRequestHandler() {
+      
+      function StubHttpRequestHandler() {        
         this.getJSON = function (url, load_callback, other_args) {
-          var response_arr = (url.match(/\^NORESULT\?/) ? undefined : books_response);
-          call_callback(load_callback, response_arr);
-        }
-
-        function call_callback(callback, response) {
-          callback({'response': {'books': response}}); // simulate LibriVox JSON title search response
+          
+          httpReqUrl = url; // TODO: this is an ugly way to expose url argument
+          
+          var response_arr = url.match(/\^NORESULT\?/) ? undefined : books_response;
+          load_callback({'response': {'books': response_arr}}); // simulate LibriVox JSON title search response
         }
       }
 
@@ -106,23 +109,29 @@ describe('SearchResltsPageGenerator()', function () {
     });
 
     afterEach(function () {
-      $(bsrSelector).empty(); // I think Mocha / Karma might also clear #bSR, commenting this line has no effect
+      $(bsrSelector).empty(); // I think Mocha / Karma might also clear #bSR, commenting this line has no effect on test outcomes
     });
 
     it('appends elements containing book results to selected parent element', function () {
       spg.generatePage('abc');
       expect($(bsrSelector).children().length).equal(2);
     });
+    
+    it('generates a LibriVox API url', function () {
+      spg.generatePage('abcdefg');
+      
+      var url_passed_in = httpReqUrl;
+      expect(url_passed_in).equal("https://librivox.org/api/feed/audiobooks/title/^abcdefg?&format=json");
+    });
 
     it('populates elements with book titles and descriptions', function () {
       spg.generatePage('abc');
 
       var secondBookResult = $(bsrSelector).children()[1];
-      var secondBookTitle  = $(secondBookResult).find('h2').text(); // these are implementation details, should the test just check whether the text exists?
-      var secondBookDesc   = $(secondBookResult).find('p').text();
+      var secondBookText  = $(secondBookResult).text(); // these are implementation details, should the test just check whether the text exists?
 
-      expect(secondBookTitle).equal('placeholder book');
-      expect(secondBookDesc).equal('this is a description');
+      expect(secondBookText).match(/placeholder book/);
+      expect(secondBookText).match(/this is a description/);
     });
 
     it('adds book-id attributes to each element in the selected parent', function () {

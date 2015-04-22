@@ -101,27 +101,111 @@ $( document ).on( "pagecreate", "#chaptersListPage", function (event) {
   chaptersListGen.generatePage(selectedBook);
 });
 
-$( document ).on( "pagecreate", "#homeBook", function (event){
-  $(".ui-slider-input").hide();
-  $(".ui-slider-handle").hide(); // Issue here - the page isn't refreshing onLoad. As a result? Slider isn't keeping CSS values
-  $("#downloadProgress").val(0).slider("refresh"); // This and the two lines before can be removed once fixed
-  var id = appUIState.currentBook.id;
-  $("#downloadFullBook").click(function () {
-    var url = appUIState.currentBook.fullBookURL;
-    downloadBook(url, id);
-  });
-  $("#downloadPart").click(function(){
-    var url = appUIState.currentChapter.url;
-    downloadBook(url, id);
-  });
-  var url = appUIState.currentChapter.url;
-  $("#audioSource").prop('type', "audio/mpeg");
-  $("#audioSource").prop("src", url);
-  $("#audioSource").trigger('load'); // Probably a better way to do this... loadAudio(src) method?
+function BookDownloadManager(args) {
+  var that = this;
+  var progressBarSelector = args.progressSelector;
+
+  function downloadFile(url, finished_callback) {
+    var sdcard = navigator.getDeviceStorage("sdcard"); // TODO research other storage options - music?
+    
+    var req_progress_callback = function(event) {
+      if(event.lengthComputable){
+        var percentage = (event.loaded / event.total) * 100;
+        $(progressBarSelector).css('width', percentage + '%');
+      }
+    }
+    
+    httpRequestHandler.getBlob(
+      url, 
+      function (xhr) { finished_callback(xhr.response); },
+      {'progress_callback': req_progress_callback}
+    );
+  }
   
-  $("#audioSource").on("timeupdate", function () {
-    appUIState.currentChapter.position = this.currentTime;
-  });
+  this.downloadBook = function(book_obj) {
+    console.log('downloadBook message recieved');
+    downloadFile(book_obj.url, function (response) {
+      that.write(response, that.getBookFilePath(book_obj.id));
+    });
+  }
+  this.downloadChapter = function(book_id, chapter_obj) {
+    console.log('downloadChapter message recieved with ' + book_id + ' and ' + chapter_obj.index);
+    downloadFile(chapter_obj.url, function (response) {
+      that.write(response, that.getChapterFilePath(book_id, chapter_obj.index));
+    });
+  }
+  
+  this.write = function (blob, path) { // should be moved to different object
+    var sdcard = navigator.getDeviceStorage('sdcard');
+    var request = sdcard.addNamed(blob, path);
+    var temp_that;
+    request.onsuccess = function () {
+      temp_that = this;
+      console.log('wrote: ' + this.result);
+    }
+  }
+  
+  this.getBookFilePath = function (book_id) {
+    console.error('getBookFilePath doesn\'t work yet.');
+    return 'librifox/' + book_id + '/full.mp3'; // will not work until we set up fullbook unzip.
+  }
+  this.getChapterFilePath = function (book_id, chapter_index) {
+    return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
+  }
+}
+
+function BookPlayerPageGenerator(args) {
+  var args = args || {};
+  
+  var dlFullBook  = args.selectors.dlFullBook;
+  var dlChapter   = args.selectors.dlChapter;
+  var audioSource = args.selectors.audioSource;
+  
+  var bookDownloadManager = args.bookDownloadManager;
+  
+  this.generatePage = function(page_args) {
+    var page_args   = page_args || {}; // how should null args be handled? Is it better to do this, or to fail loudly?
+    var book_obj    = page_args.book;
+    var chapter_obj = page_args.chapter;
+
+    $(dlFullBook).click(function () {
+      bookDownloadManager.downloadBook(book_obj); // doesn't work
+    });
+    
+    $(dlChapter).click(function(){
+      bookDownloadManager.downloadChapter(book_obj.id, chapter_obj);
+    });
+
+    $(audioSource).prop("src", chapter_obj.url);
+    $(audioSource).on("timeupdate", function () {
+      appUIState.currentChapter.position = this.currentTime;
+    });
+  }
+}
+
+var bookDownloadManager     = new BookDownloadManager({'progressSelector': ".progressBarSlider"});
+var bookPlayerPageGenerator = new BookPlayerPageGenerator(
+  {'selectors': 
+    {
+      'dlFullBook':  '#downloadFullBook',
+      'dlChapter':   '#downloadPart',
+      'audioSource': '#audioSource',
+    },
+   'bookDownloadManager': bookDownloadManager
+  }
+);
+
+$( document ).on( "pagecreate", "#homeBook", function (event) {
+  navigator.getDeviceStorage("sdcard").addNamed(new Blob(['test file'], {type: 'text/plain'}), 'librifox/test.txt'); // temp
+  navigator.getDeviceStorage("sdcard").addNamed(new Blob(['test file'], {type: 'text/plain'}), 'librifox/folder1/testalalalalala.txt'); // temp
+
+  if (!appUIState.currentBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
+    console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
+    return false;
+  }
+  bookPlayerPageGenerator.generatePage(
+    { book:    appUIState.currentBook, 
+      chapter: appUIState.currentChapter}); // is this formatting style better or worse than the regular way?
 });
 
 $( document ).on( "pagecreate", "#homeFileManager", function () { // TODO work only in LibriFox directory
@@ -142,20 +226,6 @@ $( document ).on( "pagecreate", "#homeFileManager", function () { // TODO work o
     $("#noAvailableDownloads").show();
   }
 });
-function downloadBook(URL, id) {
-  var sdcard = navigator.getDeviceStorage("sdcard");
-  var progress_callback = function (event) {
-    if(event.lengthComputable){
-      var percentage = (event.loaded / event.total) * 100;
-      $("#downloadProgress").val(percentage).slider('refresh');
-    }
-  }
-
-  httpRequestHandler.getBlob(URL, function(xhr) {
-    var filename = URL.substring(URL.lastIndexOf('/')+1);
-    sdcard.addNamed(xhr.response, filename); // TODO folder with id name ie /librifox/id/
-  }, {'progress_callback': progress_callback});
-}
 
 function SearchResltsPageGenerator(args) {
   var args = args || {};
@@ -185,11 +255,14 @@ function SearchResltsPageGenerator(args) {
   }
 
   function getSearchJSON(search_string, callback_func) {
-    httpRequestHandler.getJSON("https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(search_string) + "?&format=json",function(xhr) {
+    httpRequestHandler.getJSON(generateBookUrl(search_string), function (xhr) {
       callback_func(xhr.response.books);
     });
   }
-
+  
+  function generateBookUrl (search_string) { // this should be private, but I want to test it :(
+    return "https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(search_string) + "?&format=json";
+  }
   function clearResultsElement() { $(selector).empty(); }
 }
 var searchResultsPageGenerator = 
