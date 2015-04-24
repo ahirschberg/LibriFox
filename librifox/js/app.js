@@ -179,7 +179,7 @@ function BookPlayerPageGenerator(args) {
 
     $(audioSource).prop("src", chapter_obj.url);
     $(audioSource).on("timeupdate", function () {
-      appUIState.currentChapter.position = this.currentTime;
+      chapter_obj.position = this.currentTime;
     });
   }
 }
