@@ -2,7 +2,6 @@ window.addEventListener('DOMContentLoaded', function () {
   'use strict';
   var translate = navigator.mozL10n.get;
 });
-
 var bookCache = {};
 var httpRequestHandler = new HttpRequestHandler();
 
@@ -248,7 +247,7 @@ function SearchResltsPageGenerator(args) {
         });
         $(selector).listview('refresh');
       } else {
-        $(selector).append('<p>No books found, try simplifying your search.<br/>' + 
+        $(selector).append('<p id="noAvailableBooks">No books found, try simplifying your search.<br/>' + 
           'The LibriVox search API is not very good, so we apologize for the inconvenience.</p>');
       }
     });
