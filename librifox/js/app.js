@@ -1,6 +1,6 @@
 window.addEventListener('DOMContentLoaded', function () {
   'use strict';
-  var translate = navigator.mozL10n.get;
+  //var translate = navigator.mozL10n.get;
 });
 
 var bookCache = {};
@@ -104,8 +104,9 @@ $( document ).on( "pagecreate", "#chaptersListPage", function (event) {
 function BookDownloadManager(args) {
   var that = this;
   var progressBarSelector = args.progressSelector;
+  var httpRequestHandler = args.httpRequestHandler;
 
-  function downloadFile(url, finished_callback) {
+  function downloadFile (url, finished_callback) {
     var sdcard = navigator.getDeviceStorage("sdcard"); // TODO research other storage options - music?
     
     var req_progress_callback = function(event) {
@@ -172,7 +173,7 @@ function BookPlayerPageGenerator(args) {
       bookDownloadManager.downloadBook(book_obj); // doesn't work
     });
     
-    $(dlChapter).click(function(){
+    $(dlChapter).click(function () {
       bookDownloadManager.downloadChapter(book_obj.id, chapter_obj);
     });
 
@@ -183,17 +184,18 @@ function BookPlayerPageGenerator(args) {
   }
 }
 
-var bookDownloadManager     = new BookDownloadManager({'progressSelector': ".progressBarSlider"});
-var bookPlayerPageGenerator = new BookPlayerPageGenerator(
-  {'selectors': 
+var bookDownloadManager = new BookDownloadManager({'progressSelector': ".progressBarSlider"});
+bookPlayerArgs = 
+{
+  'bookDownloadManager': bookDownloadManager,
+  'selectors': 
     {
       'dlFullBook':  '#downloadFullBook',
       'dlChapter':   '#downloadPart',
       'audioSource': '#audioSource',
-    },
-   'bookDownloadManager': bookDownloadManager
-  }
-);
+    }
+};
+var bookPlayerPageGenerator = new BookPlayerPageGenerator(bookPlayerArgs);
 
 $( document ).on( "pagecreate", "#homeBook", function (event) {
   navigator.getDeviceStorage("sdcard").addNamed(new Blob(['test file'], {type: 'text/plain'}), 'librifox/test.txt'); // temp

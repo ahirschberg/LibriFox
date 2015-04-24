@@ -15,6 +15,24 @@ var BOOK_XML =
       '</item>' +
     '</channel> </rss>';
 
+var BOOK_OBJECT = {
+  "description": "How to garden.",
+  "title":       "How do Gardening?",
+  "id":          "1234", 
+  "fullBookURL": "http://www.example.com/full_mp3.zip"
+};
+
+var CHAPTERS_ARR = [
+  { title: "Foreword and Contents",
+    index: 0,
+    url: "http://www.example.com/gardening_00.mp3",
+    position: 0 },
+  { title: "Chapter 1",
+    index: 1,
+    url: "http://www.example.com/gardening_01.mp3",
+    position: 0 }
+];
+
 // Begin testing
 describe('#stripHTMLTags()', function () {
   it('removes all angle bracket pairs and enclosing strings', function () {
@@ -160,4 +178,48 @@ describe('SearchResltsPageGenerator()', function () {
       expect($(bsrSelector).text()).not.match(/no books found/i);
     });
   });
-})
+});
+
+describe('BookPlayerPageGenerator()', function () {
+  var bppg, dlManager, mockDlManager;
+  
+  before(function () {
+    $('<audio id="audioSource"></audio>').appendTo('body');
+    $('<button id="downloadChapter"></button>').appendTo('body');
+    $('<button id="downloadBook"></button>').appendTo('body');
+    
+    function StubHttpRequestHandler () {
+      this.getBlob = function (url, load_callback, other_args) {
+        
+      }
+    }
+    
+    dlManager = { downloadBook:    function (book_id, chapter_obj) { },
+                 downloadChapter: function(book_obj) { } 
+               };
+    dlManagerMock = sinon.mock(dlManager);
+    
+    bookPlayerArgs = 
+    {
+      'bookDownloadManager': dlManager,
+      'selectors': 
+        {
+          'dlFullBook':  '#downloadBook',
+          'dlChapter':   '#downloadChapter',
+          'audioSource': '#audioSource',
+        }
+    };
+    
+    bppg = new BookPlayerPageGenerator(bookPlayerArgs);
+  });
+  describe('#generatePage()', function () {
+    it('generates download book button that sends #downloadBook to downloadManager object when clicked', function () {
+      bppg.generatePage({book: BOOK_OBJECT, chapter: CHAPTERS_ARR[0]});
+      
+      dlManagerMock.expects("downloadBook").once().withExactArgs(BOOK_OBJECT);
+      $('#downloadBook').trigger('click'); // should call dlManager's #downloadBook method
+      
+      mockDlManager.verify();
+    });
+  });
+});
