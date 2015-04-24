@@ -244,3 +244,42 @@ describe('BookPlayerPageGenerator()', function () {
   });
 });
 
+describe("BookDownloadManager()", function() {
+  var bdm;
+      before(function(){
+        function StubHttpRequestHandler() {        
+          this.getBlob = function (url, load_callback, other_args) {
+            httpReqUrl = url; // TODO: this is an ugly way to expose url argument
+            var response_arr = 
+            load_callback({'response': {'books': response_arr}}); // simulate LibriVox JSON title search response
+          }
+        }
+       bdm = new BookDownloadManager({'httpRequestHandler': new StubHttpRequestHandler(), 'storageDevice': "sdcard"}); 
+      });
+    describe('#downloadBook()', function(){
+      it('should download the specified book', function(){
+        bdm.downloadBook(BOOK_OBJECT);
+      });
+    });
+    describe('#downloadChapter()', function(){
+      it('should download the specified chapter', function(){
+        bdm.downloadChapter(BOOK_OBJECT);
+      });
+    });
+    describe('#write()', function(){
+      it('should write the specified object to the filesystem', function(){
+        bdm.write("Blob", "123/");
+      });
+    });
+    describe('#getBookFilePath()', function(){
+      it('should return the filepath of the book, based on id', function(){
+        bdm.getBookFilePath(BOOK_OBJECT);
+      });
+    });
+    describe('#getChapterFilePath()', function(){
+      it('should return the filepath of the chapter, based on id', function(){
+        bdm.getChapterFilePath(BOOK_OBJECT);
+      });
+    });
+});
+

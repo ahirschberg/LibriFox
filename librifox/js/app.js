@@ -104,9 +104,10 @@ function BookDownloadManager(args) {
   var that = this;
   var progressBarSelector = args.progressSelector;
   var httpRequestHandler = args.httpRequestHandler;
+  var storageDevice = args.storageDevice || navigator.getDeviceStorage("sdcard");
 
   function downloadFile (url, finished_callback) {
-    var sdcard = navigator.getDeviceStorage("sdcard"); // TODO research other storage options - music?
+    // TODO research other storage options - music?
     
     var req_progress_callback = function(event) {
       if(event.lengthComputable){
@@ -136,8 +137,7 @@ function BookDownloadManager(args) {
   }
   
   this.write = function (blob, path) { // should be moved to different object
-    var sdcard = navigator.getDeviceStorage('sdcard');
-    var request = sdcard.addNamed(blob, path);
+    var request = storageDevice.addNamed(blob, path);
     var temp_that;
     request.onsuccess = function () {
       temp_that = this;
