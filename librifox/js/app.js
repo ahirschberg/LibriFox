@@ -136,13 +136,12 @@ function BookDownloadManager(args) {
   }
 
   this.downloadBook = function (book_obj) {
-    console.log('downloadBook message recieved');
+    console.warn('#downloadBook called - this function will not work until we are able to unzip files.')
     downloadFile(book_obj.url, function (response) {
       that.write(response, that.getBookFilePath(book_obj.id));
     });
   }
   this.downloadChapter = function (book_id, chapter_obj) {
-    console.log('downloadChapter message recieved with ' + book_id + ' and ' + chapter_obj.index);
     downloadFile(chapter_obj.url, function (response) {
       that.write(response, that.getChapterFilePath(book_id, chapter_obj.index));
     });
@@ -150,16 +149,15 @@ function BookDownloadManager(args) {
 
   this.write = function (blob, path) { // should be moved to different object
     var request = storageDevice.addNamed(blob, path);
-    var temp_that;
-    request.onsuccess = function () {
-      temp_that = this;
-      console.log('wrote: ' + this.result);
+    if (request) {
+      request.onsuccess = function () {
+        console.log('wrote: ' + this.result);
+      }
     }
   }
 
   this.getBookFilePath = function (book_id) {
-    console.error('getBookFilePath doesn\'t work yet.');
-    return 'librifox/' + book_id + '/full.mp3'; // will not work until we set up fullbook unzip.
+    return 'librifox/' + book_id + '/full.zip'; // will not work until we set up fullbook unzip.
   }
   this.getChapterFilePath = function (book_id, chapter_index) {
     return 'librifox/' + book_id + '/' + chapter_index + '.mp3';

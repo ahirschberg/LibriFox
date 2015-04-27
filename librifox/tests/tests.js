@@ -1,43 +1,3 @@
-// Setup sample data for tests
-var BOOK_JSON = {
-    "id": "59",
-    "title": "Adventures of Huckleberry Finn",
-    "description": "The Adventures of Huckleberry Finn is a novel by Mark Twain",
-    "url_zip_file": "google.com/coolstuff.zip"
-};
-var BOOK_XML =
-    '<rss> <channel>' +
-    '<item> <title><![CDATA[Chapter 01]]></title>' +
-    '<enclosure url="http://example.com/ch1.mp3" length="4.2MB" type="audio/mpeg" />' +
-    '</item>' +
-    '<item> <title><![CDATA[Chapter 02]]></title>' +
-    '<enclosure url="http://example.com/ch2.mp3" length="4.4MB" type="audio/mpeg" />' +
-    '</item>' +
-    '</channel> </rss>';
-
-var BOOK_OBJECT = {
-    "description": "How to garden.",
-    "title": "How do Gardening?",
-    "id": "1234",
-    "fullBookURL": "http://www.example.com/full_mp3.zip"
-};
-
-var CHAPTERS_ARR = [
-    {
-        title: "Foreword and Contents",
-        index: 0,
-        url: "http://www.example.com/gardening_00.mp3",
-        position: 0
-  },
-    {
-        title: "Chapter 1",
-        index: 1,
-        url: "http://www.example.com/gardening_01.mp3",
-        position: 0
-  }
-];
-var CHAPTER_OBJECT = CHAPTERS_ARR[0];
-
 // Begin testing
 describe('#stripHTMLTags()', function () {
     it('removes all angle bracket pairs and enclosing strings', function () {
@@ -278,49 +238,60 @@ describe('BookPlayerPageGenerator()', function () {
 });
 
 describe("BookDownloadManager()", function () {
-    var bdm;
-    var storageMock;
+    var bdm, 
+        storageMock,
+        storage,
+        testBlob;
+
     before(function () {
         function StubHttpRequestHandler() {
             this.getBlob = function (url, load_callback, other_args) {
-                    httpReqUrl = url; // TODO: this is an ugly way to expose url argument
-                    load_callback(testBlob);
-                } // simulate LibriVox JSON title search response
+                load_callback({response: testBlob});
+            } // simulate LibriVox JSON title search response
         }
-        var storage = {
-            addNamed: function (blob, path) {}
-        }
-        storageMock = sinon.mock(storage);
+
+        testBlob = {
+            size: 4001234,
+            type: "audio/mpeg"
+        };
+
+        storage = { addNamed: function (blob, path) {} };
+        
         bdm = new BookDownloadManager({
             'httpRequestHandler': new StubHttpRequestHandler(),
             'storageDevice': storage
         });
     });
-    /*  describe('#downloadBook()', function () {
+
+    beforeEach(function () {
+        storageMock = sinon.mock(storage); // must re-mock for each test
+    });
+
+    describe('#downloadBook()', function () {
         it('should download the specified book', function () {
-          storageMock.expects("addNamed").once().withExactArgs("librifox/1234/full.mp3");
+          storageMock.expects("addNamed").once().withExactArgs(testBlob, "librifox/1234/full.zip");
           bdm.downloadBook(BOOK_OBJECT);
           storageMock.verify();
         });
-      });
+    });
     describe('#downloadChapter()', function () {
       it('should download the specified chapter', function () {
-        storageMock.expects("addNamed").once().withArgs("librifox/1234/0.mp3");
+        storageMock.expects("addNamed").once().withExactArgs(testBlob, "librifox/1234/0.mp3");
         bdm.downloadChapter(BOOK_OBJECT.id, CHAPTER_OBJECT);
         storageMock.verify();
       });
     });
-    describe('#write()', function () {
+    // should be moved to new object
+    /*describe('#write()', function () {
       it('should write the specified object to the filesystem', function () {
-        bdm.write({
-          size: 4001234,
-          type: "audio/mpeg"
-        }, "123/");
+        storageMock.expects('addNamed').once().withExactArgs(testBlob, 'librifox/1234/01.mp3');
+        bdm.write(testBlob, 'librifox/1234/01.mp3');
+        storageMock.verify();
       });
-    }); */
-    describe('#getBookFilePath()', function () {
+    });*/
+    describe('#getBookFilePath()', function () { // should be moved to new object
         it('should return the filepath of the book, based on id', function () {
-            bdm.getBookFilePath(BOOK_OBJECT);
+            expect(bdm.getBookFilePath(BOOK_OBJECT.id)).equal('librifox/1234/full.zip');
         });
     });
     describe('#getChapterFilePath()', function () {
