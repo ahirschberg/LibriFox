@@ -236,11 +236,10 @@ describe('BookPlayerPageGenerator()', function () {
       expect($('#audioSource').prop('src')).equal(chapterObjInstance.url);
     });
     
-    /*it('updates chapter position property to match audio player position', function () {
+    it('updates chapter position property to match audio player position', function () {
       bppg.generatePage({book: BOOK_OBJECT, chapter: chapterObjInstance});
       $('#audioSource').currentTime = 10; // this doesn't work
-      expect(chapterObjInstance.position).equal('10'); // TODO research how to set audio src position
-    });*/
+      expect($('#audioSource').get(0).currentTime).equal('10'); // TODO research how to set audio src position
+    });
   });
 });
-
