@@ -14,10 +14,10 @@ describe('Book()', function () {
             'json': BOOK_JSON
         })).instanceOf(Book); // Is this test really necessary -- seems to be testing javascript base behavior and not our code itself
     });
-    it('should create an id field for the book, if available', function () {
+    it('should create an id field for the book as an integer, if available', function () {
         expect(new Book({
             'json': BOOK_JSON
-        }).id).equal('59');
+        }).id).equal(59);
     });
     it('should create a title field for the book, if available, with stripped HTML tags', function () {
         expect(new Book({
@@ -240,7 +240,7 @@ describe('BookPlayerPageGenerator()', function () {
 describe("BookDownloadManager()", function () {
     var bdm, 
         storageMock,
-        storage,
+        storageManager,
         testBlob;
 
     before(function () {
@@ -255,40 +255,56 @@ describe("BookDownloadManager()", function () {
             type: "audio/mpeg"
         };
 
-        storage = { addNamed: function (blob, path) {} };
+        storageManager = { test:         function (arg1) {}, // TODO remove this
+                           writeBook:    function (blob, book_id) {},
+                           writeChapter: function (blob, book_id, chapter_index) {} };
+        storageMock = sinon.mock(storageManager);
         
         bdm = new BookDownloadManager({
             'httpRequestHandler': new StubHttpRequestHandler(),
-            'storageDevice': storage
+            'storageManager': storageManager
         });
-    });
-
-    beforeEach(function () {
-        storageMock = sinon.mock(storage); // must re-mock for each test
     });
 
     describe('#downloadBook()', function () {
         it('should download the specified book', function () {
-          storageMock.expects("addNamed").once().withExactArgs(testBlob, "librifox/1234/full.zip");
+          storageMock.expects('writeBook').once().withExactArgs(testBlob, 1234);
           bdm.downloadBook(BOOK_OBJECT);
           storageMock.verify();
         });
     });
     describe('#downloadChapter()', function () {
-      it('should download the specified chapter', function () {
-        storageMock.expects("addNamed").once().withExactArgs(testBlob, "librifox/1234/0.mp3");
-        bdm.downloadChapter(BOOK_OBJECT.id, CHAPTER_OBJECT);
-        storageMock.verify();
-      });
+        it('should download the specified chapter', function () {
+            storageMock.expects('writeChapter').once().withExactArgs(testBlob, 1234, 0);
+            bdm.downloadChapter(BOOK_OBJECT.id, CHAPTER_OBJECT);
+            storageMock.verify();
+        });
     });
-    // should be moved to new object
-    /*describe('#write()', function () {
-      it('should write the specified object to the filesystem', function () {
-        storageMock.expects('addNamed').once().withExactArgs(testBlob, 'librifox/1234/01.mp3');
-        bdm.write(testBlob, 'librifox/1234/01.mp3');
-        storageMock.verify();
-      });
-    });*/
+    describe('#mockingArgsTest', function () {
+        it('tests args', function () {
+            storageMock.expects('test').once().withExactArgs('1234');
+            storageManager.test('1234');
+        });
+    });
+});
+
+/*describe('BookStorageManager', function () {
+    var bsm,
+        storage,
+        storageMock;
+    before(function () {
+        storageDevice = { addNamed: function(blob, path) {} };
+        storageMock = sinon.mock(storage);
+        bsm = new BookStorageManager({storage: storageDevice});
+    });
+    
+    describe('#write()', function () {
+        it('should write the specified object to the filesystem', function () {
+            storageMock.expects('addNamed').once().withExactArgs(testBlob, 'librifox/1234/01.mp3');
+            bdm.write(testBlob, 'librifox/1234/01.mp3');
+            storageMock.verify();
+        });
+    });
     describe('#getBookFilePath()', function () { // should be moved to new object
         it('should return the filepath of the book, based on id', function () {
             expect(bdm.getBookFilePath(BOOK_OBJECT.id)).equal('librifox/1234/full.zip');
@@ -299,4 +315,4 @@ describe("BookDownloadManager()", function () {
             bdm.getChapterFilePath(BOOK_OBJECT);
         });
     });
-});
+});*/

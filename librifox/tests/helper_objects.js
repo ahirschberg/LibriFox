@@ -18,7 +18,7 @@ var BOOK_XML =
 var BOOK_OBJECT = {
     "description": "How to garden.",
     "title": "How do Gardening?",
-    "id": "1234",
+    "id": 1234,
     "fullBookURL": "http://www.example.com/full_mp3.zip"
 };
 

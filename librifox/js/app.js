@@ -15,7 +15,7 @@ function Book(args) {
   var json = args.json;
   this.description = stripHTMLTags(json.description);
   this.title = stripHTMLTags(json.title);
-  this.id = json.id;
+  this.id = parseInt(json.id);
   this.fullBookURL = json.url_zip_file;
 }
 
@@ -113,16 +113,16 @@ function BookDownloadManager(args) {
   var that = this;
   var progressBarSelector = args.progressSelector;
   var httpRequestHandler = args.httpRequestHandler;
-  var storageDevice = args.storageDevice;
+  var storageManager = args.storageManager;
 
   function downloadFile(url, finished_callback) {
-    // TODO research other storage options - music?
-
-    var req_progress_callback = function (event) {
-      if (event.lengthComputable) {
-        var percentage = (event.loaded / event.total) * 100;
-        $(progressBarSelector).css('width', percentage + '%');
-      }
+    if (finished_callback) {
+        var req_progress_callback = function (event) {
+            if (event.lengthComputable) {
+                var percentage = (event.loaded / event.total) * 100;
+                $(progressBarSelector).css('width', percentage + '%');
+            }
+        }
     }
 
     httpRequestHandler.getBlob(
@@ -135,33 +135,43 @@ function BookDownloadManager(args) {
     );
   }
 
-  this.downloadBook = function (book_obj) {
-    console.warn('#downloadBook called - this function will not work until we are able to unzip files.')
-    downloadFile(book_obj.url, function (response) {
-      that.write(response, that.getBookFilePath(book_obj.id));
-    });
-  }
-  this.downloadChapter = function (book_id, chapter_obj) {
-    downloadFile(chapter_obj.url, function (response) {
-      that.write(response, that.getChapterFilePath(book_id, chapter_obj.index));
-    });
-  }
-
-  this.write = function (blob, path) { // should be moved to different object
-    var request = storageDevice.addNamed(blob, path);
-    if (request) {
-      request.onsuccess = function () {
-        console.log('wrote: ' + this.result);
-      }
+    this.downloadBook = function (book_obj) {
+        console.warn('#downloadBook called - this function will not work until we are able to unzip files.')
+        downloadFile(book_obj.url, function (response) {
+            storageManager.writeBook(response, book_obj.id);
+        });
     }
-  }
+    this.downloadChapter = function (book_id, chapter_obj) {
+        downloadFile(chapter_obj.url, function (response) {
+            storageManager.writeChapter(response, book_id, chapter_obj.index);
+        });
+    }
+}
 
-  this.getBookFilePath = function (book_id) {
-    return 'librifox/' + book_id + '/full.zip'; // will not work until we set up fullbook unzip.
-  }
-  this.getChapterFilePath = function (book_id, chapter_index) {
-    return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
-  }
+function BookStorageManager () {
+    var that = this;
+    this.writeBook    = function (blob, book_id) {
+        var bookPath = that.getBookFilePath(book_id);
+        that.write(blob, bookPath);
+    };
+    this.writeChapter = function (blob, book_id, chapter_index) {
+        var chPath = that.getChapterFilePath(book_id, chapter_index);
+        that.write(blob, chPath);
+    };
+    this.write = function (blob, path) { // should be moved to different object
+        var request = storageDevice.addNamed(blob, path);
+        if (request) {
+            request.onsuccess = function () {
+                console.log('wrote: ' + this.result);
+            };
+        }
+    };
+    this.getBookFilePath = function (book_id) {
+        return 'librifox/' + book_id + '/full.zip'; // will not work until we set up fullbook unzip.
+    };
+    this.getChapterFilePath = function (book_id, chapter_index) {
+        return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
+    };
 }
 
 function BookPlayerPageGenerator(args) {
@@ -197,12 +207,12 @@ var bookDownloadManager = new BookDownloadManager({
   'progressSelector': ".progressBarSlider"
 });
 bookPlayerArgs = {
-  'bookDownloadManager': bookDownloadManager,
-  'selectors': {
+    'bookDownloadManager': bookDownloadManager,
+    'selectors': {
     'dlFullBook': '#downloadFullBook',
     'dlChapter': '#downloadPart',
     'audioSource': '#audioSource',
-  }
+    }
 };
 var bookPlayerPageGenerator = new BookPlayerPageGenerator(bookPlayerArgs);
 
