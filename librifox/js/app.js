@@ -126,14 +126,14 @@ function BookDownloadManager(args) {
     }
 
     httpRequestHandler.getBlob(
-      url,
-      function (xhr) {
-        finished_callback(xhr.response);
-      }, {
-        'progress_callback': req_progress_callback
-      }
-    );
-  }
+        url,
+        function (xhr) {
+            finished_callback(xhr.response);
+            }, {
+                'progress_callback': req_progress_callback
+            }
+        );
+    }
 
     this.downloadBook = function (book_obj) {
         console.warn('#downloadBook called - this function will not work until we are able to unzip files.')
@@ -147,9 +147,17 @@ function BookDownloadManager(args) {
         });
     }
 }
+var bookStorageManager  = new BookStorageManager({storageDevice: navigator.getDeviceStorage('sdcard')});
+var bookDownloadManager = new BookDownloadManager({
+    progressSelector:   ".progressBarSlider",
+    httpRequestHandler: httpRequestHandler,
+    storageManager: bookStorageManager
+});
 
-function BookStorageManager () {
+function BookStorageManager (args) {
     var that = this;
+    var storageDevice = args.storageDevice;
+    
     this.writeBook    = function (blob, book_id) {
         var bookPath = that.getBookFilePath(book_id);
         that.write(blob, bookPath);
@@ -158,6 +166,7 @@ function BookStorageManager () {
         var chPath = that.getChapterFilePath(book_id, chapter_index);
         that.write(blob, chPath);
     };
+
     this.write = function (blob, path) { // should be moved to different object
         var request = storageDevice.addNamed(blob, path);
         if (request) {
@@ -203,15 +212,12 @@ function BookPlayerPageGenerator(args) {
   }
 }
 
-var bookDownloadManager = new BookDownloadManager({
-  'progressSelector': ".progressBarSlider"
-});
 bookPlayerArgs = {
     'bookDownloadManager': bookDownloadManager,
     'selectors': {
-    'dlFullBook': '#downloadFullBook',
-    'dlChapter': '#downloadPart',
-    'audioSource': '#audioSource',
+        'dlFullBook': '#downloadFullBook',
+        'dlChapter': '#downloadPart',
+        'audioSource': '#audioSource',
     }
 };
 var bookPlayerPageGenerator = new BookPlayerPageGenerator(bookPlayerArgs);
