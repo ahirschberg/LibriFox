@@ -1,11 +1,4 @@
 // Sample data for tests
-var BOOK_OBJECT = {
-    'description': 'How to garden.',
-    'title': 'How do Gardening?',
-    'id': 1234,
-    'fullBookURL': 'http://www.example.com/full_mp3.zip'
-};
-
 var CHAPTERS_ARR = [
     {
         title: 'Foreword and Contents',
@@ -21,13 +14,14 @@ var CHAPTERS_ARR = [
   }
 ];
 var CHAPTER_OBJECT = CHAPTERS_ARR[0];
+
 var WEB_RESP = { 
     audio_blob: {
         size: 4001234,
         type: 'audio/mpeg'
     },
     book_json: {
-        id: '59',
+        id: '1234',
         title: 'Adventures of Huckleberry Finn',
         description: 'The Adventures of Huckleberry Finn is a novel by Mark Twain',
         url_zip_file: 'google.com/coolstuff.zip'
@@ -42,3 +36,5 @@ var WEB_RESP = {
         '</item>' +
         '</channel> </rss>',
 };
+
+var BOOK_OBJECT = new Book({json: WEB_RESP.book_json});
