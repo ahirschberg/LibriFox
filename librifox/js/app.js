@@ -161,7 +161,6 @@ function BookStorageManager(args) {
 
     this.writeBook = function (blob, book_id) {
         var bookPath = that.getBookFilePath(book_id);
-        console.log(bookPath);
         that.write(blob, bookPath);
     };
     this.writeChapter = function (blob, book_id, chapter_index) {
