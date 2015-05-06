@@ -111,32 +111,35 @@ $(document).on("pagecreate", "#chaptersListPage", function (event) {
 
 function BookDownloadManager(args) {
     var that = this;
-    var progressBarSelector = args.progressSelector;
+    var progressSelector = args.progressSelector;
     var httpRequestHandler = args.httpRequestHandler;
     var storageManager = args.storageManager;
 
     function downloadFile(url, finished_callback) {
-        if (finished_callback) {
-            var req_progress_callback = function (event) {
+        var req_progress_callback;
+        var additional_args = {};
+        if (progressSelector) {
+            req_progress_callback = function (event) {
                 if (event.lengthComputable) {
                     var percentage = (event.loaded / event.total) * 100;
-                    $(progressBarSelector).css('width', percentage + '%');
+                    $(progressSelector).css('width', percentage + '%');
                 }
-            }
+            };
         }
-
+                
+        if (progressSelector) {
+            additional_args.progress_callback = function () { req_progress_callback.apply(this, arguments) };
+        }
+        
         httpRequestHandler.getBlob(
             url,
-            function (xhr) {
-                finished_callback(xhr.response);
-            }, {
-                'progress_callback': req_progress_callback
-            });
+            function (xhr) { finished_callback(xhr.response); }, 
+            additional_args);
     }
 
     this.downloadBook = function (book_obj) {
         console.warn('#downloadBook called - this function will not work until we are able to unzip files.')
-        downloadFile(book_obj.url, function (response) {
+        downloadFile(book_obj.fullBookUrl, function (response) {
             storageManager.writeBook(response, book_obj.id);
         });
     }
