@@ -239,6 +239,9 @@ $(document).on("pagecreate", "#homeBook", function (event) {
 });
 
 $(document).on("pagecreate", "#homeFileManager", function () {
+    $('#deleteAll').click(function () {
+        __tempDeleteAllAppFiles();
+    });
     displayAppFiles();
 });
 
