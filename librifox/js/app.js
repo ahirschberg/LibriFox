@@ -149,8 +149,9 @@ function BookDownloadManager(args) {
         });
     }
 }
+
 var bookStorageManager = new BookStorageManager({
-    storageDevice: undefined//navigator.getDeviceStorage('sdcard')
+    storageDevice: navigator.getDeviceStorage && navigator.getDeviceStorage('sdcard')// when karma evals this code, #getDeviceStorage is undefined, causing tests to crash
 });
 var bookDownloadManager = new BookDownloadManager({
     progressSelector: ".progressBarSlider",
@@ -227,13 +228,6 @@ bookPlayerArgs = {
 var bookPlayerPageGenerator = new BookPlayerPageGenerator(bookPlayerArgs);
 
 $(document).on("pagecreate", "#homeBook", function (event) {
-    navigator.getDeviceStorage("sdcard").addNamed(new Blob(['test file'], {
-        type: 'text/plain'
-    }), 'librifox/test.txt'); // temp
-    navigator.getDeviceStorage("sdcard").addNamed(new Blob(['test file'], {
-        type: 'text/plain'
-    }), 'librifox/folder1/testalalalalala.txt'); // temp
-
     if (!appUIState.currentBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
         console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
         return false;
@@ -244,24 +238,79 @@ $(document).on("pagecreate", "#homeBook", function (event) {
     }); // is this formatting style better or worse than the regular way?
 });
 
-$(document).on("pagecreate", "#homeFileManager", function () { // TODO work only in LibriFox directory
+$(document).on("pagecreate", "#homeFileManager", function () {
+    $('#deleteAll').click(function () {
+        __tempDeleteAllAppFiles();
+    });
+    displayAppFiles();
+});
+
+function displayAppFiles() {
     var sdcard = navigator.getDeviceStorage('sdcard');
-    var request = sdcard.enumerate();
-    request.onsuccess = function () {
-        if (this.result) {
-            fileListItem = $('<li><a data-icon="delete">' + this.result.name + '</a></li>');
-            fileListItem.click(function () {
-                // play book... change page and set audio src to the file
-            });
-            $("#downloadedFiles").append(fileListItem);
-            this.continue();
+    var times_called = 0;
+    var enumeration_cb = function(result) {
+        times_called++;
+        fileListItem = $('<li>' + result.name + '</li>');
+        $("#downloadedFiles").append(fileListItem);
+    }
+    var done_cb = function () {
+        console.log('found ' + times_called + ' files');
+        if (times_called < 1) {
+            $("#downloadedFiles").append('<li>No files found</li>');
         }
         $("#downloadedFiles").listview('refresh');
+    }
+    
+    $("#downloadedFiles").empty();
+    enumerateFiles({
+        storage: sdcard,
+        match: /librifox\/.*/,
+        func_each: enumeration_cb,
+        func_done: done_cb
+    });
+}
+
+function enumerateFiles(args) {
+    var storage = args.storage,
+        match = args.match,
+        func_each = args.func_each,
+        func_done = args.func_done,
+        func_error = args.func_error;
+    
+    var request = storage.enumerate();
+    request.onsuccess = function () {
+        if (this.result) {
+            if (this.result.name.match(match)) {
+                console.log('calling func_each');
+
+                func_each(this.result);
+            }
+            this.continue();
+        } else {
+            console.log('calling func_done');
+            func_done();
+        }
     };
     request.onerror = function () {
-        $("#noAvailableDownloads").show();
+        func_error && func_error(); // does this work?
+    };
+}
+
+function __tempDeleteAllAppFiles() {
+    var sdcard = navigator.getDeviceStorage('sdcard');
+    var enumeration_cb = function (result) {
+        console.log(result.name + ' will be deleted');
+        sdcard.delete(result.name);
     }
-});
+    enumerateFiles({
+        storage: sdcard,
+        match: /librifox\/.*/,
+        func_each: enumeration_cb,
+        func_done: function () {displayAppFiles();}
+    });
+    
+    
+}
 
 function SearchResltsPageGenerator(args) {
     var args = args || {};
