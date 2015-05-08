@@ -47,9 +47,12 @@ var appUIState = new UIState({
 function ChaptersListPageGenerator(args) {
     var args = args || {};
     var httpRequestHandler = args.httpRequestHandler;
-    var selector = args.selector;
+    var list_selector     = args.list_selector;
+    var header_selector   = args.header_selector
 
     this.generatePage = function (book) {
+        $(header_selector).text(book.title); // untested, TODO update tests
+        
         if (book.chapters) {
             showLocalChapters(book.chapters);
         } else {
@@ -64,7 +67,7 @@ function ChaptersListPageGenerator(args) {
         $.each(chapters, function (index, chapter) {
             generateChapterListItem(chapter);
         });
-        $(selector).listview('refresh');
+        $(list_selector).listview('refresh');
     };
 
     function generateChapterListItem(chapter) {
@@ -72,7 +75,7 @@ function ChaptersListPageGenerator(args) {
         chapterListItem.click(function () {
             appUIState.setCurrentChapterByIndex($(this).attr("chapter-index"));
         });
-        $(selector).append(chapterListItem);
+        $(list_selector).append(chapterListItem);
     };
 
     function getChaptersFromFeed(book_id, callback_func) {
@@ -98,7 +101,8 @@ function ChaptersListPageGenerator(args) {
 
 var chaptersListGen = new ChaptersListPageGenerator({
     'httpRequestHandler': httpRequestHandler,
-    'selector': '#chaptersList'
+    'list_selector': '#chaptersList',
+    'header_selector': '#chapterHeader'
 });
 $(document).on("pagecreate", "#chaptersListPage", function (event) {
     var selectedBook = appUIState.currentBook;
@@ -238,78 +242,81 @@ $(document).on("pagecreate", "#homeBook", function (event) {
     }); // is this formatting style better or worse than the regular way?
 });
 
+var fileManager = new FileManager();
 $(document).on("pagecreate", "#homeFileManager", function () {
     $('#deleteAll').click(function () {
-        __tempDeleteAllAppFiles();
+        fileManager.deleteAllAppFiles();
     });
-    displayAppFiles();
+    fileManager.displayAppFiles();
 });
 
-function displayAppFiles() {
-    var sdcard = navigator.getDeviceStorage('sdcard');
-    var times_called = 0;
-    var enumeration_cb = function(result) {
-        times_called++;
-        fileListItem = $('<li>' + result.name + '</li>');
-        $("#downloadedFiles").append(fileListItem);
-    }
-    var done_cb = function () {
-        console.log('found ' + times_called + ' files');
-        if (times_called < 1) {
-            $("#downloadedFiles").append('<li>No files found</li>');
+function FileManager () {
+    var that = this;
+    
+    this.displayAppFiles = function () {
+        var sdcard = navigator.getDeviceStorage('sdcard');
+        var times_called = 0;
+        var enumeration_cb = function(result) {
+            times_called++;
+            fileListItem = $('<li>' + result.name + '</li>');
+            $("#downloadedFiles").append(fileListItem);
         }
-        $("#downloadedFiles").listview('refresh');
-    }
-    
-    $("#downloadedFiles").empty();
-    enumerateFiles({
-        storage: sdcard,
-        match: /librifox\/.*/,
-        func_each: enumeration_cb,
-        func_done: done_cb
-    });
-}
-
-function enumerateFiles(args) {
-    var storage = args.storage,
-        match = args.match,
-        func_each = args.func_each,
-        func_done = args.func_done,
-        func_error = args.func_error;
-    
-    var request = storage.enumerate();
-    request.onsuccess = function () {
-        if (this.result) {
-            if (this.result.name.match(match)) {
-                console.log('calling func_each');
-
-                func_each(this.result);
+        var done_cb = function () {
+            console.log('found ' + times_called + ' files');
+            if (times_called < 1) {
+                $("#downloadedFiles").append('<li>No files found</li>');
             }
-            this.continue();
-        } else {
-            console.log('calling func_done');
-            func_done();
+            $("#downloadedFiles").listview('refresh');
         }
-    };
-    request.onerror = function () {
-        func_error && func_error(); // does this work?
-    };
-}
 
-function __tempDeleteAllAppFiles() {
-    var sdcard = navigator.getDeviceStorage('sdcard');
-    var enumeration_cb = function (result) {
-        console.log(result.name + ' will be deleted');
-        sdcard.delete(result.name);
+        $("#downloadedFiles").empty();
+        that.enumerateFiles({
+            storage: sdcard,
+            match: /librifox\/.*/,
+            func_each: enumeration_cb,
+            func_done: done_cb
+        });
     }
-    enumerateFiles({
-        storage: sdcard,
-        match: /librifox\/.*/,
-        func_each: enumeration_cb,
-        func_done: function () {displayAppFiles();}
-    });
-    
-    
+
+    this.enumerateFiles = function(args) {
+        var storage = args.storage,
+            match = args.match,
+            func_each = args.func_each,
+            func_done = args.func_done,
+            func_error = args.func_error;
+
+        var request = storage.enumerate();
+        request.onsuccess = function () {
+            if (this.result) {
+                if (this.result.name.match(match)) {
+                    console.log('calling func_each');
+
+                    func_each(this.result);
+                }
+                this.continue();
+            } else {
+                console.log('calling func_done');
+                func_done();
+            }
+        };
+        request.onerror = function () {
+            func_error && func_error(); // does this work?
+        };
+    }
+
+    this.deleteAllAppFiles = function () {
+        var sdcard = navigator.getDeviceStorage('sdcard');
+        var enumeration_cb = function (result) {
+            console.log(result.name + ' will be deleted');
+            sdcard.delete(result.name);
+        }
+        that.enumerateFiles({
+            storage: sdcard,
+            match: /librifox\/.*/,
+            func_each: enumeration_cb,
+            func_done: function () {that.displayAppFiles();}
+        });
+    }
 }
 
 function SearchResltsPageGenerator(args) {

@@ -15,7 +15,7 @@ describe('ChaptersListPageGenerator()', function () {
 
             var cpg = new ChaptersListPageGenerator({
                 'httpRequestHandler': new StubHttpRequestHandler(),
-                'selector': '#chapters-list'
+                'list_selector': '#chapters-list' // todo test book name in header
             });
             cpg.generatePage(new Book({
                 'json': WEB_RESP.book_json
