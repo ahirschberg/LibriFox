@@ -6,8 +6,7 @@ describe('BookPlayerPageGenerator()', function () {
         $test_div.appendTo('body');
 
         dlManager = {
-            downloadBook: function (book_id, chapter_obj) {},
-            downloadChapter: function (book_obj) {}
+            downloadChapter: function () {}
         };
         dlManagerMock = sinon.mock(dlManager); // create wrapper object for dlManager
 
@@ -41,11 +40,7 @@ describe('BookPlayerPageGenerator()', function () {
                 chapter: chapterObjInstance
             });
 
-            dlManagerMock.expects("downloadBook").once().withExactArgs(BOOK_OBJECT);
-            $('#downloadBook').trigger('click'); // should call dlManager's #downloadBook method
-            dlManagerMock.verify();
-
-            dlManagerMock.expects("downloadChapter").once().withExactArgs(BOOK_OBJECT.id, chapterObjInstance);
+            dlManagerMock.expects("downloadChapter").once().withExactArgs(BOOK_OBJECT, chapterObjInstance);
             $('#downloadChapter').trigger('click');
             dlManagerMock.verify();
         });

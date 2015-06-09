@@ -16,7 +16,6 @@ function Book(args) {
     this.description = stripHTMLTags(json.description);
     this.title = stripHTMLTags(json.title);
     this.id = parseInt(json.id);
-    this.fullBookUrl = json.url_zip_file;
 }
 
 function Chapter(args) {
@@ -113,26 +112,27 @@ $(document).on("pagecreate", "#chaptersListPage", function (event) {
     chaptersListGen.generatePage(selectedBook);
 });
 
+$(document).on("pagecreate", "#bookSearch", function (event) {
+    $("#newSearch").submit(function (event) {
+        $("#booksList").empty();
+        var input = $("#bookSearch").val();
+        searchResultsPageGenerator.generatePage(input);
+        return false;
+    });
+});
+
 function BookDownloadManager(args) {
     var that = this;
-    var progressSelector = args.progressSelector;
+    var progress_callback = args.progress_callback;
     var httpRequestHandler = args.httpRequestHandler;
     var storageManager = args.storageManager;
 
     function downloadFile(url, finished_callback) {
         var req_progress_callback;
         var additional_args = {};
-        if (progressSelector) {
-            req_progress_callback = function (event) {
-                if (event.lengthComputable) {
-                    var percentage = (event.loaded / event.total) * 100;
-                    $(progressSelector).css('width', percentage + '%');
-                }
-            };
-        }
-                
-        if (progressSelector) {
-            additional_args.progress_callback = function () { req_progress_callback.apply(this, arguments) };
+        
+        if (progress_callback) {
+            additional_args.progress_callback = function () { progress_callback.apply(this, arguments) };
         }
         
         httpRequestHandler.getBlob(
@@ -140,40 +140,47 @@ function BookDownloadManager(args) {
             function (xhr) { finished_callback(xhr.response); }, 
             additional_args);
     }
-
-    this.downloadBook = function (book_obj) {
-        console.warn('#downloadBook called - this function will not work until we are able to unzip files.')
-        downloadFile(book_obj.fullBookUrl, function (response) {
-            storageManager.writeBook(response, book_obj.id);
-        });
-    }
-    this.downloadChapter = function (book_id, chapter_obj) {
+    
+    this.downloadChapter = function (book_obj, chapter_obj) {
         downloadFile(chapter_obj.url, function (response) {
-            storageManager.writeChapter(response, book_id, chapter_obj.index);
+            storageManager.writeChapter(response, book_obj, chapter_obj.index);
         });
     }
 }
 
-var bookStorageManager = new BookStorageManager({
-    storageDevice: navigator.getDeviceStorage && navigator.getDeviceStorage('sdcard')// when karma evals this code, #getDeviceStorage is undefined, causing tests to crash
-});
+var lf_getDeviceStorage = function (storage_str) {
+  return navigator.getDeviceStorage && navigator.getDeviceStorage(storage_str || 'sdcard');
+}
+
+var makeBookStorageManager = function (args) { // keep this or remove it?
+    var default_args = {
+        storageDevice: lf_getDeviceStorage()
+    }
+    return new BookStorageManager(args || default_args);
+}
+
+var bookStorageManager = makeBookStorageManager();
+
 var bookDownloadManager = new BookDownloadManager({
-    progressSelector: ".progressBarSlider",
+    progress_callback: function (event) { // move this into a new object
+        if (event.lengthComputable) {
+            var percentage = (event.loaded / event.total) * 100;
+            $('.progressBarSlider').css('width', percentage + '%');
+        }
+    },
     httpRequestHandler: httpRequestHandler,
     storageManager: bookStorageManager
 });
 
 function BookStorageManager(args) {
-    var that = this;
-    var storageDevice = args.storageDevice;
+    var that = this,
+        storageDevice = args.storageDevice,
+        local_storage = args.localStorage || localStorage;
 
-    this.writeBook = function (blob, book_id) {
-        var bookPath = that.getBookFilePath(book_id);
-        that.write(blob, bookPath);
-    };
-    this.writeChapter = function (blob, book_id, chapter_index) {
-        var chPath = that.getChapterFilePath(book_id, chapter_index);
+    this.writeChapter = function (blob, book_obj, chapter_index) {
+        var chPath = that.getChapterFilePath(book_obj.id, chapter_index);
         that.write(blob, chPath);
+        that.storeJSONReference(book_obj, chapter_index, chPath);
     };
 
     this.write = function (blob, path) { // should be moved to different object
@@ -184,9 +191,17 @@ function BookStorageManager(args) {
             };
         }
     };
-    this.getBookFilePath = function (book_id) {
-        return 'librifox/' + book_id + '/full.zip'; // will not work until we set up fullbook unzip.
+    
+    this.storeJSONReference = function (book_obj, chapter_index, path) {
+        var obj = JSON.parse(local_storage.getItem(book_obj.id));
+        if (!obj) {
+            obj = {title: book_obj.title};
+        }
+        obj[chapter_index] = path;
+        local_storage.setItem(book_obj.id, JSON.stringify(obj));
+        console.log('wrote to localstorage:', local_storage.getItem(book_obj.id));
     };
+    
     this.getChapterFilePath = function (book_id, chapter_index) {
         return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
     };
@@ -206,12 +221,8 @@ function BookPlayerPageGenerator(args) {
         var book_obj = page_args.book;
         var chapter_obj = page_args.chapter;
 
-        $(dlFullBook).click(function () {
-            bookDownloadManager.downloadBook(book_obj); // doesn't work
-        });
-
         $(dlChapter).click(function () {
-            bookDownloadManager.downloadChapter(book_obj.id, chapter_obj);
+            bookDownloadManager.downloadChapter(book_obj, chapter_obj);
         });
 
         $(audioSource).prop("src", chapter_obj.url);
@@ -242,7 +253,7 @@ $(document).on("pagecreate", "#homeBook", function (event) {
     }); // is this formatting style better or worse than the regular way?
 });
 
-var fileManager = new FileManager();
+var fileManager = new FileManager(lf_getDeviceStorage());
 $(document).on("pagecreate", "#homeFileManager", function () {
     $('#deleteAll').click(function () {
         fileManager.deleteAllAppFiles();
@@ -250,11 +261,10 @@ $(document).on("pagecreate", "#homeFileManager", function () {
     fileManager.displayAppFiles();
 });
 
-function FileManager () {
+function FileManager (storage_device) {
     var that = this;
     
     this.displayAppFiles = function () {
-        var sdcard = navigator.getDeviceStorage('sdcard');
         var times_called = 0;
         var enumeration_cb = function(result) {
             times_called++;
@@ -271,21 +281,19 @@ function FileManager () {
 
         $("#downloadedFiles").empty();
         that.enumerateFiles({
-            storage: sdcard,
             match: /librifox\/.*/,
             func_each: enumeration_cb,
             func_done: done_cb
         });
     }
 
-    this.enumerateFiles = function(args) {
-        var storage = args.storage,
-            match = args.match,
+    this.enumerateFiles = function (args) {
+        var match = args.match,
             func_each = args.func_each,
             func_done = args.func_done,
             func_error = args.func_error;
 
-        var request = storage.enumerate();
+        var request = storage_device.enumerate();
         request.onsuccess = function () {
             if (this.result) {
                 if (this.result.name.match(match)) {
@@ -300,18 +308,16 @@ function FileManager () {
             }
         };
         request.onerror = function () {
-            func_error && func_error(); // does this work?
+            func_error && func_error();
         };
     }
 
     this.deleteAllAppFiles = function () {
-        var sdcard = navigator.getDeviceStorage('sdcard');
         var enumeration_cb = function (result) {
             console.log(result.name + ' will be deleted');
-            sdcard.delete(result.name);
+            storage_device.delete(result.name);
         }
         that.enumerateFiles({
-            storage: sdcard,
             match: /librifox\/.*/,
             func_each: enumeration_cb,
             func_done: function () {that.displayAppFiles();}
@@ -332,7 +338,7 @@ function SearchResltsPageGenerator(args) {
                     var book = new Book({
                         'json': book_entry
                     });
-                    bookCache[book.id] = book; // this ends up storing id 3 times (as key, in book object, and in book object json)
+                    bookCache[book.id] = book;
                     bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
                     bookListItem.click(function () {
                         appUIState.setCurrentBookById($(this).attr("book-id"));
@@ -366,13 +372,6 @@ var searchResultsPageGenerator =
         'httpRequestHandler': httpRequestHandler,
         'selector': '#booksList'
     });
-
-$("#newSearch").submit(function (event) {
-    $("#booksList").empty();
-    var input = $("#bookSearch").val();
-    searchResultsPageGenerator.generatePage(input);
-    return false;
-});
 
 function HttpRequestHandler() {
     var that = this;

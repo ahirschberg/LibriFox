@@ -15,7 +15,4 @@ describe('Book()', function () {
     it('should create a description field for the book, if available, with stripped HTML tags', function () {
         expect(book.description).equal("The Adventures of Huckleberry Finn is a novel by Mark Twain");
     });
-    it('should create an object for the zip file url for the book, if available', function () {
-        expect(book.fullBookUrl).equal("google.com/coolstuff.zip");
-    });
 });

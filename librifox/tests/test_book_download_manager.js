@@ -41,15 +41,6 @@ describe('BookDownloadManager()', function () {
         blobSpy.reset();
     });
 
-    describe('#downloadBook()', function () {
-        it('should download the specified book', function () {
-            storageMock.expects('writeBook').once().withExactArgs(testBlob, 1234);
-            blobSpy.withArgs(BOOK_OBJECT.fullBookUrl); // same thing, different syntax. great.
-            bdm.downloadBook(BOOK_OBJECT);
-            expect(blobSpy.withArgs(BOOK_OBJECT.fullBookUrl).calledOnce).true
-            storageMock.verify();
-        });
-    });
     describe('#downloadChapter()', function () {
         it('should download the specified chapter', function () {
             storageMock.expects('writeChapter').once().withExactArgs(testBlob, 1234, 0);
@@ -57,19 +48,17 @@ describe('BookDownloadManager()', function () {
             storageMock.verify();
         });
     });
-    describe('progress_callback', function () {
-        describe('progressBarSelector string supplied', function () {
+    describe('progressCallback', function () {
+        describe('supplied', function () {
             it('passes a progress callback to httpRequestHandler', function () {
-                var tempBdm = newBDM({'progressSelector': '.progress'});
-                tempBdm.downloadBook(BOOK_OBJECT);
+                var tempBdm = newBDM({progress_callback: function () {}});
+                tempBdm.downloadChapter(BOOK_OBJECT.id, CHAPTER_OBJECT);
                 expect(blobSpy.getCall(0).args[2].progress_callback).a('function');
             });
-            
-            // should we check if the callback actually updates the progress bar?
         });
-        describe('progressBarSelector string not supplied', function () {
+        describe('not supplied', function () {
             it('does not pass the callback function', function () {
-                bdm.downloadBook(BOOK_OBJECT);
+                bdm.downloadChapter(BOOK_OBJECT.id, CHAPTER_OBJECT);
                 expect(blobSpy.getCall(0).args[2].progress_callback).to.be.an('undefined');
             });
         });
