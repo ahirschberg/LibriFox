@@ -168,6 +168,7 @@ function BookStorageManager(args) {
     var that = this,
         storageDevice = args.storageDevice,
         local_storage = args.localStorage || localStorage;
+    this.JSON_PREFIX = 'bookid_';
 
     this.writeChapter = function (blob, book_obj, chapter_index) {
         var chPath = that.getChapterFilePath(book_obj.id, chapter_index);
@@ -185,19 +186,58 @@ function BookStorageManager(args) {
     };
     
     this.storeJSONReference = function (book_obj, chapter_index, path) {
-        var obj = JSON.parse(local_storage.getItem(book_obj.id));
+        var obj = that.loadJSONReference(book_obj.id);
         if (!obj) {
             obj = {title: book_obj.title};
         }
         obj[chapter_index] = path;
-        local_storage.setItem(book_obj.id, JSON.stringify(obj));
-        console.log('wrote to localstorage:', local_storage.getItem(book_obj.id));
+        local_storage.setItem(that.JSON_PREFIX + book_obj.id, JSON.stringify(obj));
+        console.log('wrote to localstorage:', local_storage.getItem(that.JSON_PREFIX + book_obj.id));
+    };
+    
+    this.loadJSONReference = function (book_id) {
+        return JSON.parse(local_storage.getItem(that.JSON_PREFIX + book_id));
+    }
+    
+    this.eachReference = function (each_fn) {
+        Object.keys(local_storage).forEach(function (key) {
+            console.log(key);
+            if (key.startsWith(that.JSON_PREFIX) && local_storage.hasOwnProperty(key)) {
+                var book_ref = JSON.parse(local_storage.getItem(key));
+                each_fn(book_ref);
+            }
+        });
     };
     
     this.getChapterFilePath = function (book_id, chapter_index) {
         return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
     };
 }
+
+function StoredBooksPageGenerator(args) {
+    var that = this,
+        storageManager = args.bookStorageManager;
+    
+    this.registerEvents = function(selectors) {
+        $(document).on('pagecreate', selectors.page, function () {
+            var $list = $(selectors.list);
+            $list.children('li.stored-book').remove();
+            storageManager.eachReference(function (obj) {
+                var link = $('<a/>', {
+                    text: obj.title
+                });
+                $('<li/>', {
+                  class: 'stored-book',
+                  html: link
+                }).appendTo($list);
+            });
+            $list.listview('refresh');
+        });
+    };
+}
+
+var storedBooksPageGenerator = new StoredBooksPageGenerator({bookStorageManager: bookStorageManager});
+storedBooksPageGenerator.registerEvents({list: '#stored-books-list'});
 
 function BookPlayerPageGenerator(args) {
     var args = args || {};
@@ -209,7 +249,7 @@ function BookPlayerPageGenerator(args) {
     var bookDownloadManager = args.bookDownloadManager;
 
     this.generatePage = function (page_args) {
-        var page_args = page_args || {}; // how should null args be handled? Is it better to do this, or to fail loudly?
+        var page_args = page_args;
         var book_obj = page_args.book;
         var chapter_obj = page_args.chapter;
 
