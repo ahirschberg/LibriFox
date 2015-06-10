@@ -36,3 +36,7 @@ p {
     margin: 20px;
     text-align: center;
 }
+
+.showFullText {
+    white-space: normal !important;
+}

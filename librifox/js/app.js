@@ -224,7 +224,9 @@ function StoredBooksPageGenerator(args) {
             $list.children('li.stored-book').remove();
             storageManager.eachReference(function (obj) {
                 var link = $('<a/>', {
-                    text: obj.title
+                    class: 'showFullText',
+                    text: obj.title,
+                    href: 'stored_chapters.html'
                 });
                 $('<li/>', {
                   class: 'stored-book',
@@ -232,6 +234,10 @@ function StoredBooksPageGenerator(args) {
                 }).appendTo($list);
             });
             $list.listview('refresh');
+        });
+        
+        $(document).on('pagecreate', '#storedChapters', function () {
+            console.log('storedChapters loaded');
         });
     };
 }
