@@ -1,32 +1,38 @@
-html, body {
-  margin: 0;
-  padding: 0.5rem;
+html,
+body {
+    margin: 0;
+    padding: 0.5rem;
 }
 
 body {
-  font-size: 1rem;
-  background: #fff;
+    font-size: 1rem;
+    background: #fff;
 }
 
 h1 {
-  margin: 0 0 1rem 0;
+    margin: 0 0 1rem 0;
 }
 
 p {
-  font-size: inherit;
+    font-size: inherit;
 }
 
 .progressBar {
-  width: 90%;
-  height: 25px;
-  padding: 0px;
-  margin-left: auto;
-  margin-right: auto;
+    width: 90%;
+    height: 25px;
+    padding: 0px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .progressBarSlider {
-  background-color: #F00;
-  border-radius: 2px;
-  width: 0;
-  height: inherit;
+    background-color: #F00;
+    border-radius: 2px;
+    width: 0;
+    height: inherit;
+}
+
+.noAvailableBooks {
+    margin: 20px;
+    text-align: center;
 }

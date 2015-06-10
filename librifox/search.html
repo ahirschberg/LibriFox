@@ -26,10 +26,15 @@
 
 <body>
     <div data-role="page" id="bookSearch">
-        <form id="newSearch">
-            <input type="search" placeholder="Enter a written work" name="search-mini" id="bookSearch" data-mini="true" />
+        <header data-role="header">
+            <h1>Search</h1>
+            <!-- TODO fix overflow cutoff? -->
+            <a data-rel="back" data-icon="back" data-iconpos="notext"></a>
+        </header>
+        <form id="search-form">
+            <input type="search" placeholder="Enter a written work" name="search-mini" id="books-search-bar" data-mini="true" />
         </form>
-        <ul data-role="listview" id="booksList"></ul>
+        <ul data-role="listview" id="results-listing"></ul>
     </div>
 </body>
 

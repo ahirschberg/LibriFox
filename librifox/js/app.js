@@ -103,6 +103,7 @@ var chaptersListGen = new ChaptersListPageGenerator({
     'list_selector': '#chaptersList',
     'header_selector': '#chapterHeader'
 });
+
 $(document).on("pagecreate", "#chaptersListPage", function (event) {
     var selectedBook = appUIState.currentBook;
     if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
@@ -110,15 +111,6 @@ $(document).on("pagecreate", "#chaptersListPage", function (event) {
         return false;
     }
     chaptersListGen.generatePage(selectedBook);
-});
-
-$(document).on("pagecreate", "#bookSearch", function (event) {
-    $("#newSearch").submit(function (event) {
-        $("#booksList").empty();
-        var input = $("#bookSearch").val();
-        searchResultsPageGenerator.generatePage(input);
-        return false;
-    });
 });
 
 function BookDownloadManager(args) {
@@ -250,7 +242,7 @@ $(document).on("pagecreate", "#homeBook", function (event) {
     bookPlayerPageGenerator.generatePage({
         book: appUIState.currentBook,
         chapter: appUIState.currentChapter
-    }); // is this formatting style better or worse than the regular way?
+    });
 });
 
 var fileManager = new FileManager(lf_getDeviceStorage());
@@ -326,12 +318,26 @@ function FileManager (storage_device) {
 }
 
 function SearchResltsPageGenerator(args) {
-    var args = args || {};
-    var httpRequestHandler = args.httpRequestHandler;
-    var selector = args.selector; // #booksList
+    var httpRequestHandler = args.httpRequestHandler,
+        results_selector = args.results_selector,
+        that = this;
+    if (!results_selector) {
+        console.warn('results_selector is undefined');
+    }
 
-    this.generatePage = function (search_string) {
-        clearResultsElement();
+    this.registerEvents = function (selectors) {
+        $(document).on("pagecreate", selectors.page, function (event) {
+            $(selectors.form).submit(function (event) {
+                $(results_selector).empty();
+                var input = $(selectors.search).val();
+                that.displayResults(input);
+                return false;
+            });
+        });
+    }
+    
+    this.displayResults = function (search_string) {
+        $(results_selector).empty();
         getSearchJSON(search_string, function (books) {
             if (books) {
                 books.forEach(function (book_entry) {
@@ -339,16 +345,19 @@ function SearchResltsPageGenerator(args) {
                         'json': book_entry
                     });
                     bookCache[book.id] = book;
-                    bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>');
+                    bookListItem = $('<li book-id="' + book.id + '"><a href="chapters.html"><h2>' + book.title + '</h2><p>' + book.description + '</p></a></li>'); //TODO remove injection vulnerability
                     bookListItem.click(function () {
                         appUIState.setCurrentBookById($(this).attr("book-id"));
                     });
-                    $(selector).append(bookListItem);
+                    $(results_selector).append(bookListItem);
                 });
-                $(selector).listview('refresh');
+                $(results_selector).listview('refresh');
             } else {
-                $(selector).append('<p id="noAvailableBooks">No books found, try simplifying your search.<br/>' +
-                    'The LibriVox search API is not very good, so we apologize for the inconvenience.</p>');
+                $(results_selector).append(
+                    '<p class="noAvailableBooks">' +
+                    'No books found, try simplifying your search.<br/>' +
+                    'The LibriVox search API is not very good, so we' +
+                    'apologize for the inconvenience.</p>');
             }
         });
     }
@@ -362,16 +371,17 @@ function SearchResltsPageGenerator(args) {
     function generateBookUrl(search_string) { // this should be private, but I want to test it :(
         return "https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(search_string) + "?&format=json";
     }
-
-    function clearResultsElement() {
-        $(selector).empty();
-    }
 }
 var searchResultsPageGenerator =
     new SearchResltsPageGenerator({
         'httpRequestHandler': httpRequestHandler,
-        'selector': '#booksList'
+        'results_selector': '#results-listing'
     });
+searchResultsPageGenerator.registerEvents({
+    page: "#bookSearch",
+    form: "#search-form",
+    search: "#books-search-bar"
+});
 
 function HttpRequestHandler() {
     var that = this;
