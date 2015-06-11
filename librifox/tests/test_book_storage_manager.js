@@ -23,7 +23,6 @@ describe('BookStorageManager()', function () {
     beforeEach(function () {
         // regenerate store and storageMock for each test
         store = Object.create(ls_proto);
-        console.log(store, store.getItem);
         bsm = new BookStorageManager({
             storageDevice: storageDevice,
             localStorage: store
@@ -52,10 +51,13 @@ describe('BookStorageManager()', function () {
     });
     describe('#loadJSONReference()', function () {
         it('loads object from local_storage', function () {
-            expect(bsm.loadJSONReference(9999)).to.eql({
-                0: 'path1/to',
-                title: BOOK_OBJECT.title
-            });
+            var loaded_reference = bsm.loadJSONReference(9999);
+            expect(loaded_reference).to.have.property(0, 'path1/to');
+            expect(loaded_reference).to.have.property('title', BOOK_OBJECT.title);
+        });
+        it('adds helper functions to object', function () {
+            var loaded_reference = bsm.loadJSONReference(9999);
+            expect(loaded_reference).property('eachChapter').to.be.a('function');
         });
     });
     describe('#storeJSONReference', function () {
@@ -101,13 +103,17 @@ describe('BookStorageManager()', function () {
 
             var result = [];
             bsm.eachReference(function(obj) {
-                console.log(obj);
                 result.push(obj[0]);
             });
 
             expect(result.length).to.equal(2);
             expect(result).to.contain('this/is/path');
             expect(result).not.to.contain('bad');
+        });
+        it('objects have helper functions', function () {
+            bsm.eachReference(function(obj) {
+                expect(obj).property('eachChapter').to.be.a('function');
+            });
         });
     });
 });

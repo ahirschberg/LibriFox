@@ -1,7 +1,3 @@
-window.addEventListener('DOMContentLoaded', function () {
-    'use strict';
-    //var translate = navigator.mozL10n.get;
-});
 var bookCache = {};
 var httpRequestHandler = new HttpRequestHandler();
 
@@ -196,18 +192,31 @@ function BookStorageManager(args) {
     };
     
     this.loadJSONReference = function (book_id) {
-        return JSON.parse(local_storage.getItem(that.JSON_PREFIX + book_id));
-    }
+        var book_ref = JSON.parse(local_storage.getItem(that.JSON_PREFIX + book_id));
+        return book_ref && applyHelperFunctions(book_ref);
+    };
     
     this.eachReference = function (each_fn) {
         Object.keys(local_storage).forEach(function (key) {
-            console.log(key);
             if (key.startsWith(that.JSON_PREFIX) && local_storage.hasOwnProperty(key)) {
                 var book_ref = JSON.parse(local_storage.getItem(key));
+                applyHelperFunctions(book_ref);
                 each_fn(book_ref);
             }
         });
     };
+    
+    function applyHelperFunctions(book_ref) {
+        var ch_index_regex = /^\d+$/;
+        book_ref.eachChapter = function (each_fn) {
+            Object.keys(book_ref).forEach(function (key) {
+                if (ch_index_regex.test(key) && book_ref.hasOwnProperty(key)) {
+                    each_fn(book_ref[key], key);
+                }
+            });
+        };
+        return book_ref;
+    }
     
     this.getChapterFilePath = function (book_id, chapter_index) {
         return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
@@ -216,17 +225,23 @@ function BookStorageManager(args) {
 
 function StoredBooksPageGenerator(args) {
     var that = this,
-        storageManager = args.bookStorageManager;
+        storageManager = args.bookStorageManager,
+        ui_state = {};
     
     this.registerEvents = function(selectors) {
+        if (!selectors.page) {
+            console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
+        }
         $(document).on('pagecreate', selectors.page, function () {
+            console.log('pagecreate called');
             var $list = $(selectors.list);
             $list.children('li.stored-book').remove();
             storageManager.eachReference(function (obj) {
                 var link = $('<a/>', {
                     class: 'showFullText',
                     text: obj.title,
-                    href: 'stored_chapters.html'
+                    href: 'stored_chapters.html',
+                    click: function () { ui_state.ref = obj}
                 });
                 $('<li/>', {
                   class: 'stored-book',
@@ -236,14 +251,29 @@ function StoredBooksPageGenerator(args) {
             $list.listview('refresh');
         });
         
+        // TODO soft code selectors, DRY code, restructure JSON to store more data
         $(document).on('pagecreate', '#storedChapters', function () {
             console.log('storedChapters loaded');
+            $('.chapter-title').text(ui_state.ref.title);
+            var $list = $('#stored-chapters-list');
+            $list.children('li.stored-book').remove();
+            ui_state.ref.eachChapter(function (path) {
+                var link = $('<a/>', {
+                    class: 'showFullText',
+                    text: path,
+                });
+                $('<li/>', {
+                    class: 'stored-chapter',
+                    html: link
+                }).appendTo($list);
+            });
+            $list.listview('refresh');
         });
     };
 }
 
 var storedBooksPageGenerator = new StoredBooksPageGenerator({bookStorageManager: bookStorageManager});
-storedBooksPageGenerator.registerEvents({list: '#stored-books-list'});
+storedBooksPageGenerator.registerEvents({list: '#stored-books-list', page: '#storedBooks'});
 
 function BookPlayerPageGenerator(args) {
     var args = args || {};
@@ -348,7 +378,7 @@ function FileManager (storage_device) {
         request.onerror = function () {
             func_error && func_error();
         };
-    }
+    };
 
     this.deleteAllAppFiles = function () {
         var enumeration_cb = function (result) {
