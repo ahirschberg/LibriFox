@@ -1,4 +1,5 @@
 describe('BookDownloadManager()', function () {
+    "use strict";
     var bdm, 
         storageMock,
         storageManager,
@@ -6,7 +7,7 @@ describe('BookDownloadManager()', function () {
         blobSpy;
     
     function newBDM(desired_args) {
-        args = {
+        var args = {
             'httpRequestHandler': httpRequestHandler,
             'storageManager': storageManager
         };
@@ -17,21 +18,18 @@ describe('BookDownloadManager()', function () {
     }
 
     before(function () {
-
-
+        testBlob = WEB_RESP.audio_blob;
         function StubHttpRequestHandler() {
             this.getBlob = function (url, load_callback, other_args) {
                 load_callback({response: testBlob});
             } // simulate LibriVox JSON title search response
-            
-            //this.test = testFunc; //temp
         }
         httpRequestHandler = new StubHttpRequestHandler();
         blobSpy = sinon.spy(httpRequestHandler, 'getBlob');
 
-        storageManager = { test:         function (arg1) {}, // TODO remove this
-                           writeBook:    function (blob, book_id) {},
-                           writeChapter: function (blob, book_id, chapter_index) {} };
+        storageManager = {
+            writeChapter: function (blob, book_obj, chapter_obj) {} 
+        };
         storageMock = sinon.mock(storageManager);
         
         bdm = newBDM();
@@ -43,8 +41,8 @@ describe('BookDownloadManager()', function () {
 
     describe('#downloadChapter()', function () {
         it('should download the specified chapter', function () {
-            storageMock.expects('writeChapter').once().withExactArgs(testBlob, 1234, 0);
-            bdm.downloadChapter(BOOK_OBJECT.id, CHAPTER_OBJECT);
+            storageMock.expects('writeChapter').once().withExactArgs(testBlob, BOOK_OBJECT, CHAPTER_OBJECT);
+            bdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT);
             storageMock.verify();
         });
     });
@@ -52,13 +50,13 @@ describe('BookDownloadManager()', function () {
         describe('supplied', function () {
             it('passes a progress callback to httpRequestHandler', function () {
                 var tempBdm = newBDM({progress_callback: function () {}});
-                tempBdm.downloadChapter(BOOK_OBJECT.id, CHAPTER_OBJECT);
+                tempBdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT);
                 expect(blobSpy.getCall(0).args[2].progress_callback).a('function');
             });
         });
         describe('not supplied', function () {
             it('does not pass the callback function', function () {
-                bdm.downloadChapter(BOOK_OBJECT.id, CHAPTER_OBJECT);
+                bdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT);
                 expect(blobSpy.getCall(0).args[2].progress_callback).to.be.an('undefined');
             });
         });

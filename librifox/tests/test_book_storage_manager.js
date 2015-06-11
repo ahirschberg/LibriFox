@@ -29,7 +29,10 @@ describe('BookStorageManager()', function () {
         });
         
         store[bsm.JSON_PREFIX + 9999] = JSON.stringify({
-            0: 'path1/to',
+            0: {
+                path: 'path1/to',
+                name: 'Introduction'
+            },
             title: BOOK_OBJECT.title
         });
         storageMock = sinon.mock(storageDevice);
@@ -38,7 +41,7 @@ describe('BookStorageManager()', function () {
     describe('#writeChapter()', function () {
         it('should generate chapter path via #getChapterFilePath and write to file system', function () {
             storageMock.expects('addNamed').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/1234/0.mp3');
-            bsm.writeChapter(WEB_RESP.audio_blob, BOOK_OBJECT, 0);
+            bsm.writeChapter(WEB_RESP.audio_blob, BOOK_OBJECT, CHAPTER_OBJECT);
             storageMock.verify();
         });
     });
@@ -50,26 +53,32 @@ describe('BookStorageManager()', function () {
         });
     });
     describe('#loadJSONReference()', function () {
-        it('loads object from local_storage', function () {
-            var loaded_reference = bsm.loadJSONReference(9999);
-            expect(loaded_reference).to.have.property(0, 'path1/to');
-            expect(loaded_reference).to.have.property('title', BOOK_OBJECT.title);
+        it('loads book_reference from local_storage', function () {
+            var book_ref = bsm.loadJSONReference(9999);
+            expect(book_ref).to.have.property(0);
+                        
+            expect(book_ref).to.have.property('title', BOOK_OBJECT.title);
         });
         it('adds helper functions to object', function () {
-            var loaded_reference = bsm.loadJSONReference(9999);
-            expect(loaded_reference).property('eachChapter').to.be.a('function');
+            var book_ref = bsm.loadJSONReference(9999);
+            expect(book_ref).property('eachChapter').to.be.a('function');
         });
     });
     describe('#storeJSONReference', function () {
         it('writes to localstorage', function () {
             var fake_path = 'path/to/file',
-                fake_ch_index = 1,
                 mock_book = {
                     id: 1111
-                };
+                },
+                mock_chapter = {
+                    index: 1,
+                    name: 'Chapter 1'
+                }
 
-            bsm.storeJSONReference(mock_book, fake_ch_index, fake_path);
-            expect(bsm.loadJSONReference(1111)).to.have.property(1, fake_path);
+            bsm.storeJSONReference(mock_book, mock_chapter, fake_path);
+            var ch1_ref = bsm.loadJSONReference(1111)[1];
+            expect(ch1_ref).to.have.property('path', fake_path);
+            expect(ch1_ref).to.have.property('name', 'Chapter 1');
         });
         it('adds a title property if the entry doesn\'t already exist', function () {
             var fake_ch_index = 1,
@@ -78,17 +87,28 @@ describe('BookStorageManager()', function () {
                     title: 'this is a title'
                 };
 
-            bsm.storeJSONReference(mock_book, 0, 'path/to/file');
+            bsm.storeJSONReference(mock_book, CHAPTER_OBJECT, 'path/to/file');
             expect(bsm.loadJSONReference(1111)).to.have.property('title', mock_book.title);
         });
         it('appends new keys if object already exists', function () {
             var mock_book = {
                 id: 9999
             };
-            bsm.storeJSONReference(mock_book, 1, 'path2/to');
+            var mock_chapter = {
+                index: 1,
+                name: 'Chapter 1'
+            }
+            bsm.storeJSONReference(mock_book, mock_chapter, 'path2/to');
             var stored = bsm.loadJSONReference(9999);
-            expect(stored).to.have.property(0, 'path1/to');
-            expect(stored).to.have.property(1, 'path2/to');
+            expect(stored[0]).to.be.a('object');
+            expect(stored[1]).to.be.a('object');
+        });
+        it('stores indexed chapter references', function () {
+            
+            var book_ref = bsm.loadJSONReference(9999),
+                ch0_ref = book_ref[0];
+            expect(ch0_ref).to.have.property('path', 'path1/to');
+            expect(ch0_ref).to.have.property('name', 'Introduction');
         });
     });
     describe('#getChapterFilePath()', function () {
@@ -98,12 +118,12 @@ describe('BookStorageManager()', function () {
     });
     describe('#eachReference()', function () {
         it('takes a function and passes it each book key in local_storage', function () {
-            store['abcdef'] = {0: 'bad'};
-            bsm.storeJSONReference(BOOK_OBJECT.id, 0, 'this/is/path');
+            store['abcdef'] = {0: {path: 'bad'}};
+            bsm.storeJSONReference(BOOK_OBJECT, CHAPTER_OBJECT, 'this/is/path');
 
             var result = [];
             bsm.eachReference(function(obj) {
-                result.push(obj[0]);
+                result.push(obj[0].path);
             });
 
             expect(result.length).to.equal(2);
