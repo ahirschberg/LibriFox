@@ -59,30 +59,43 @@ function ChaptersListPageGenerator(args) {
         }
     };
 
-    function showLocalChapters(book, chapters) {
+    function showLocalChapters(book) {
+        $(list_selector).append($('<li/>', {
+            html: $('<a/>', {
+                text: 'Download all chapters (WIP)'
+            }),
+            click: function () {
+                book.chapters.forEach(function (chapter) {
+                    downloadChapterWithCbk(book,chapter);
+                });
+            }
+        }));
         $.each(book.chapters, function (index, chapter) {
-            generateChapterListItem(book, chapter);
+            generateChapterListItem(book, chapter, this);
         });
         $(list_selector).listview('refresh');
     };
 
     function generateChapterListItem(book, chapter) {
-        var chapterListItem = $('<li chapter-index=' + chapter.index + '><a><h2>' + chapter.name + '</h2></a><div class="progressBar"><div class="progressBarSlider"></div></div></li>');
+        var chapterListItem = $('<li class="chapter-listing" chapter-index=' + chapter.index + '><a><h2>' + chapter.name + '</h2></a><div class="progressBar"><div class="progressBarSlider"></div></div></li>');
         chapterListItem.click(function () {
-            var that = this;
             console.log(this);
-            bookDownloadManager.downloadChapter(
-                book,
-                chapter,
-                function (event) { // move this into a new object
-                    if (event.lengthComputable) {
-                        var percentage = (event.loaded / event.total) * 100;
-                        $(that).find('.progressBarSlider').css('width', percentage + '%');
-                    }
-                });
+            downloadChapterWithCbk(book, chapter, this);
         });
         $(list_selector).append(chapterListItem);
     };
+    
+    function downloadChapterWithCbk(book, chapter, that) {
+        return bookDownloadManager.downloadChapter(
+            book,
+            chapter,
+            function (event) { // move this into a new object
+                if (event.lengthComputable) {
+                    var percentage = (event.loaded / event.total) * 100;
+                    $(that).find('.progressBarSlider').css('width', percentage + '%');
+                }
+            });
+    }
 
     function getChaptersFromFeed(book_id, callback_func) {
         httpRequestHandler.getXML("https://librivox.org/rss/" + encodeURIComponent(book_id), function (xhr) {

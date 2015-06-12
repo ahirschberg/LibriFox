@@ -1,4 +1,4 @@
-describe('ChaptersListPageGenerator()', function () {
+describe('ChaptersListPageGenerator()', function () { // TODO test downloading
     describe('#generatePage()', function () {
         before(function () {
             var ul = $('<ul data-role="listview" id="chapters-list"></ul>');
@@ -22,15 +22,14 @@ describe('ChaptersListPageGenerator()', function () {
             }));
         });
 
-        it('appends elements with chapter titles to selected parent element', function () {
-            expect($('#chapters-list').children().length).equal(2);
-            expect($('#chapters-list').children()[1].textContent).match(/^Chapter 02$/);
+        it('appends elements with chapter titles to selected parent element', function () { // these tests now ignore the download all button, which is untested :P
+            expect($('#chapters-list').children('.chapter-listing').length).equal(2);
+            expect($('#chapters-list').children('.chapter-listing')[1].textContent).match(/^Chapter 02$/);
         });
         it('adds chapter-index attributes to each element in the selected parent', function () {
-            $('#chapters-list').children().each(function (i) {
+            $('#chapters-list').children('.chapter-listing').each(function (i) {
                 expect($(this).attr('chapter-index')).equal(i + '');
             });
         });
     });
-    // Should we test private methods?  I don't think it's necessary.
 });
