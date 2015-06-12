@@ -1,32 +1,35 @@
 <!DOCTYPE html>
 <html>
-  <head>
+
+<head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width">
     <link rel="stylesheet" href="css/app.css">
     <link rel="prefetch" type="application/l10n" href="data/locales.ini" />
-    <script type="text/javascript" src="js/libs/l10n.js" defer></script> 
+    <script type="text/javascript" src="js/libs/l10n.js" defer></script>
     <script type="text/javascript" src="js/app.js" defer></script>
     <script src="js/jquery-2.1.3.js"></script>
     <script src="jquerymobile/jquery.mobile-1.4.5.js"></script>
-    <link rel="stylesheet" href="jquerymobile/jquery.mobile-1.4.5.css"/>
+    <link rel="stylesheet" href="jquerymobile/jquery.mobile-1.4.5.css" />
     <style>
     </style>
-  </head>
-  <body>
+</head>
+
+<body>
     <div data-role="page" id="homeBook">
-            <header data-role="header" id="homeHeaderBook">
-                <h1>LibriFox Player</h1>
-                <a data-rel="back" data-icon="back" data-iconpos="notext"></a>
-            </header>
-      <section>
-      <audio id="audioSource" preload="metadata" controls type="audio/mpeg"></audio>
-        <button id="downloadPart">Download Part</button>
-        <!--input id="downloadProgress" data-highlight="true" min="0" max="100" value="0" type="range" data-mini="true" disabled/-->
-        <div class="progressBar">
-          <div class="progressBarSlider"></div>
-        </div>
-      </section>
+        <header data-role="header" id="homeHeaderBook">
+            <h1>LibriFox Player</h1>
+            <a data-rel="back" data-icon="back" data-iconpos="notext"></a>
+        </header>
+        <section>
+            <audio id="audioSource" preload="metadata" controls type="audio/mpeg"></audio>
+            <button id="downloadPart">Download Part</button>
+            <!--input id="downloadProgress" data-highlight="true" min="0" max="100" value="0" type="range" data-mini="true" disabled/-->
+            <div class="progressBar">
+                <div class="progressBarSlider"></div>
+            </div>
+        </section>
     </div>
-  </body>
+</body>
+
 </html>
