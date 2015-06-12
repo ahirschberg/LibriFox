@@ -51,23 +51,22 @@ describe('BookDownloadManager()', function () {
                     CHAPTER_OBJECT
                 )).to.be.true;
         });
-    });
-    describe('progressCallback', function () {
-        describe('supplied', function () {
-            it('passes a progress callback to httpRequestHandler', function () {
-                var tempBdm = newBDM({progress_callback: function () {}});
-                tempBdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT);
-                expect(blobSpy
-                    .getCall(0)
-                    .args[2]
-                    .progress_callback
-                ).a('function'); // wow that message chain sure is ugly
+        describe('progressCallback', function () {
+            describe('supplied', function () {
+                it('passes a progress callback to httpRequestHandler', function () {
+                    bdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT, function () {});
+                    expect(blobSpy
+                        .getCall(0)
+                        .args[2]
+                        .progress_callback
+                    ).a('function'); // wow that message chain sure is ugly
+                });
             });
-        });
-        describe('not supplied', function () {
-            it('does not pass the callback function', function () {
-                bdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT);
-                expect(blobSpy.getCall(0).args[2].progress_callback).to.be.an('undefined');
+            describe('not supplied', function () {
+                it('does not pass the callback function', function () {
+                    bdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT, undefined);
+                    expect(blobSpy.getCall(0).args[2].progress_callback).to.be.an('undefined');
+                });
             });
         });
     });
