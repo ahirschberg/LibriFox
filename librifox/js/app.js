@@ -140,36 +140,15 @@ var lf_getDeviceStorage = function (storage_str) {
   return navigator.getDeviceStorage && navigator.getDeviceStorage(storage_str || 'sdcard');
 }
 
-var makeBookStorageManager = function (args) { // keep this or remove it?
-    var default_args = {
-        storageDevice: lf_getDeviceStorage()
-    }
-    return new BookStorageManager(args || default_args);
-}
-
-var bookStorageManager = makeBookStorageManager();
-
-var bookDownloadManager = new BookDownloadManager({
-    progress_callback: function (event) { // move this into a new object
-        if (event.lengthComputable) {
-            var percentage = (event.loaded / event.total) * 100;
-            $('.progressBarSlider').css('width', percentage + '%');
-        }
-    },
-    httpRequestHandler: httpRequestHandler,
-    storageManager: bookStorageManager
-});
-
 function BookStorageManager(args) {
     var that = this,
         storageDevice = args.storageDevice,
-        local_storage = args.localStorage || localStorage;
-    this.JSON_PREFIX = 'bookid_';
+        referenceManager = args.referenceManager;
 
     this.writeChapter = function (blob, book_obj, chapter_obj) {
         var chPath = that.getChapterFilePath(book_obj.id, chapter_obj.index);
         that.write(blob, chPath);
-        that.storeJSONReference(book_obj, chapter_obj, chPath);
+        referenceManager.storeJSONReference(book_obj, chapter_obj, chPath);
     };
 
     this.write = function (blob, path) { // should be moved to different object
@@ -180,6 +159,17 @@ function BookStorageManager(args) {
             };
         }
     };
+        
+    this.getChapterFilePath = function (book_id, chapter_index) {
+        return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
+    };
+}
+
+function BookReferenceManager(args) {
+    var args = args || {},
+        local_storage = args.localStorage || localStorage,
+        that = this;
+    this.JSON_PREFIX = 'bookid_';
     
     this.storeJSONReference = function (book_obj, chapter_obj, path) {
         if (!isValidIndex(book_obj.id)) {
@@ -206,6 +196,7 @@ function BookStorageManager(args) {
     
     this.eachReference = function (each_fn) {
         Object.keys(local_storage).forEach(function (key) {
+            console.log(key);
             if (key.startsWith(that.JSON_PREFIX) && local_storage.hasOwnProperty(key)) {
                 var book_ref = JSON.parse(local_storage.getItem(key));
                 applyHelperFunctions(book_ref);
@@ -228,15 +219,26 @@ function BookStorageManager(args) {
     function isValidIndex(index) {
         return /^\d+$/.test(index)
     }
-    
-    this.getChapterFilePath = function (book_id, chapter_index) {
-        return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
-    };
 }
+var bookReferenceManager = new BookReferenceManager(),
+    bookStorageManager = new BookStorageManager({
+        storageDevice: lf_getDeviceStorage(),
+        referenceManager: bookReferenceManager
+    }),
+    bookDownloadManager = new BookDownloadManager({
+        progress_callback: function (event) { // move this into a new object
+            if (event.lengthComputable) {
+                var percentage = (event.loaded / event.total) * 100;
+                $('.progressBarSlider').css('width', percentage + '%');
+            }
+        },
+        httpRequestHandler: httpRequestHandler,
+        storageManager: bookStorageManager
+    });
 
 function StoredBooksPageGenerator(args) {
     var that = this,
-        storageManager = args.bookStorageManager,
+        referenceManager = args.bookReferenceManager,
         ui_state = {};
     
     this.registerEvents = function(selectors) {
@@ -247,7 +249,7 @@ function StoredBooksPageGenerator(args) {
             console.log('pageshow called for ' + selectors.page);
             var $list = $(selectors.list);
             $list.children('li.stored-book').remove();
-            storageManager.eachReference(function (obj) {
+            referenceManager.eachReference(function (obj) {
                 var link = $('<a/>', {
                     class: 'showFullText',
                     text: obj.title,
@@ -284,7 +286,7 @@ function StoredBooksPageGenerator(args) {
     };
 }
 
-var storedBooksPageGenerator = new StoredBooksPageGenerator({bookStorageManager: bookStorageManager});
+var storedBooksPageGenerator = new StoredBooksPageGenerator({bookReferenceManager: bookReferenceManager});
 storedBooksPageGenerator.registerEvents({list: '#stored-books-list', page: '#storedBooks'});
 
 function BookPlayerPageGenerator(args) {
@@ -502,7 +504,6 @@ function HttpRequestHandler() {
             xhr.addEventListener('timeout', other_args.timeout_callback);
             xhr.addEventListener('progress', other_args.progress_callback);
             //  xhr.upload.addEventListener("load", transferComplete, false);
-            //  xhr.upload.addEventListener("error", transferFailed, false);
             //  xhr.upload.addEventListener("abort", transferCanceled, false);
             xhr.open('GET', url);
             if (type != 'default') {

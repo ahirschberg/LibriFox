@@ -1,7 +1,7 @@
 describe('BookDownloadManager()', function () {
     "use strict";
     var bdm, 
-        storageMock,
+        writeChapterSpy,
         storageManager,
         testBlob,
         blobSpy;
@@ -13,7 +13,9 @@ describe('BookDownloadManager()', function () {
         };
         
         // add or overwrite default properties with supplied args
-        for (var attrname in desired_args) { args[attrname] = desired_args[attrname]; } 
+        for (var attrname in desired_args) {
+            args[attrname] = desired_args[attrname];
+        } 
         return new BookDownloadManager(args);
     }
 
@@ -30,7 +32,7 @@ describe('BookDownloadManager()', function () {
         storageManager = {
             writeChapter: function (blob, book_obj, chapter_obj) {} 
         };
-        storageMock = sinon.mock(storageManager);
+        writeChapterSpy = sinon.spy(storageManager, 'writeChapter');
         
         bdm = newBDM();
     });
@@ -41,9 +43,13 @@ describe('BookDownloadManager()', function () {
 
     describe('#downloadChapter()', function () {
         it('should download the specified chapter', function () {
-            storageMock.expects('writeChapter').once().withExactArgs(testBlob, BOOK_OBJECT, CHAPTER_OBJECT);
             bdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT);
-            storageMock.verify();
+            expect(writeChapterSpy.calledOnce).to.be.true;
+            expect(writeChapterSpy.firstCall.calledWithExactly(
+                    testBlob,
+                    BOOK_OBJECT,
+                    CHAPTER_OBJECT
+                )).to.be.true;
         });
     });
     describe('progressCallback', function () {
@@ -51,7 +57,11 @@ describe('BookDownloadManager()', function () {
             it('passes a progress callback to httpRequestHandler', function () {
                 var tempBdm = newBDM({progress_callback: function () {}});
                 tempBdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT);
-                expect(blobSpy.getCall(0).args[2].progress_callback).a('function');
+                expect(blobSpy
+                    .getCall(0)
+                    .args[2]
+                    .progress_callback
+                ).a('function'); // wow that message chain sure is ugly
             });
         });
         describe('not supplied', function () {
