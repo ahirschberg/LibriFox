@@ -7,7 +7,7 @@ function stripHTMLTags(str) {
 
 function Book(args) {
     this.chapters = args.chapters;
-    
+
     var json = args.json;
     this.description = stripHTMLTags(json.description);
     this.title = stripHTMLTags(json.title);
@@ -42,12 +42,12 @@ var appUIState = new UIState({
 function ChaptersListPageGenerator(args) {
     var args = args || {};
     var httpRequestHandler = args.httpRequestHandler;
-    var list_selector     = args.list_selector;
-    var header_selector   = args.header_selector
+    var list_selector = args.list_selector;
+    var header_selector = args.header_selector
 
     this.generatePage = function (book) {
         $(header_selector).text(book.title); // untested, TODO update tests
-        
+
         if (book.chapters) {
             showLocalChapters(book.chapters);
         } else {
@@ -118,17 +118,21 @@ function BookDownloadManager(args) {
     function downloadFile(url, finished_callback) {
         var req_progress_callback;
         var additional_args = {};
-        
+
         if (progress_callback) {
-            additional_args.progress_callback = function () { progress_callback.apply(this, arguments) };
+            additional_args.progress_callback = function () {
+                progress_callback.apply(this, arguments)
+            };
         }
-        
+
         httpRequestHandler.getBlob(
             url,
-            function (xhr) { finished_callback(xhr.response); }, 
+            function (xhr) {
+                finished_callback(xhr.response);
+            },
             additional_args);
     }
-    
+
     this.downloadChapter = function (book_obj, chapter_obj) {
         downloadFile(chapter_obj.url, function (response) {
             storageManager.writeChapter(response, book_obj, chapter_obj);
@@ -137,7 +141,7 @@ function BookDownloadManager(args) {
 }
 
 var lf_getDeviceStorage = function (storage_str) {
-  return navigator.getDeviceStorage && navigator.getDeviceStorage(storage_str || 'sdcard');
+    return navigator.getDeviceStorage && navigator.getDeviceStorage(storage_str || 'sdcard');
 }
 
 function BookStorageManager(args) {
@@ -159,7 +163,7 @@ function BookStorageManager(args) {
             };
         }
     };
-        
+
     this.getChapterFilePath = function (book_id, chapter_index) {
         return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
     };
@@ -170,14 +174,16 @@ function BookReferenceManager(args) {
         local_storage = args.localStorage || localStorage,
         that = this;
     this.JSON_PREFIX = 'bookid_';
-    
+
     this.storeJSONReference = function (book_obj, chapter_obj, path) {
         if (!isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
         var obj = that.loadJSONReference(book_obj.id);
         if (!obj) {
-            obj = {title: book_obj.title};
+            obj = {
+                title: book_obj.title
+            };
         }
         if (!isValidIndex(chapter_obj.index)) {
             throw new Error('chapter_obj.index is not a valid index: ' + chapter_obj.index);
@@ -188,12 +194,12 @@ function BookReferenceManager(args) {
         };
         local_storage.setItem(that.JSON_PREFIX + book_obj.id, JSON.stringify(obj));
     };
-    
+
     this.loadJSONReference = function (book_id) {
         var book_ref = JSON.parse(local_storage.getItem(that.JSON_PREFIX + book_id));
         return book_ref && applyHelperFunctions(book_ref);
     };
-    
+
     this.eachReference = function (each_fn) {
         Object.keys(local_storage).forEach(function (key) {
             console.log(key);
@@ -204,7 +210,7 @@ function BookReferenceManager(args) {
             }
         });
     };
-    
+
     function applyHelperFunctions(book_ref) {
         book_ref.eachChapter = function (each_fn) {
             Object.keys(book_ref).forEach(function (key) {
@@ -215,7 +221,7 @@ function BookReferenceManager(args) {
         };
         return book_ref;
     }
-    
+
     function isValidIndex(index) {
         return /^\d+$/.test(index)
     }
@@ -239,9 +245,9 @@ var bookReferenceManager = new BookReferenceManager(),
 function StoredBooksPageGenerator(args) {
     var that = this,
         referenceManager = args.bookReferenceManager,
-        ui_state = {};
-    
-    this.registerEvents = function(selectors) {
+        ui_state = args.ui_state;
+
+    this.registerEvents = function (selectors) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
@@ -254,27 +260,42 @@ function StoredBooksPageGenerator(args) {
                     class: 'showFullText',
                     text: obj.title,
                     href: 'stored_chapters.html',
-                    click: function () { ui_state.ref = obj}
+                    click: function () {
+                        ui_state.ref = obj
+                    }
                 });
                 $('<li/>', {
-                  class: 'stored-book',
-                  html: link
+                    class: 'stored-book',
+                    html: link
                 }).appendTo($list);
             });
             $list.listview('refresh');
         });
-        
-        // TODO soft code selectors, DRY code, restructure JSON to store more data
-        $(document).on('pageshow', '#storedChapters', function () {
+
+
+    };
+}
+
+function StoredChaptersPageGenerator(args) {
+    var that = this,
+        ui_state = args.ui_state;
+
+    this.registerEvents = function (selectors) {
+        if (!selectors.page) {
+            console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
+        }
+        $(document).on('pageshow', selectors.page, function () {
             console.log('storedChapters shown');
-            $('.chapter-title').text(ui_state.ref.title);
-            var $list = $('#stored-chapters-list');
-            $list.children('li.stored-book').remove();
-            ui_state.ref.eachChapter(function (obj) {
+            $(selectors.header_title).text(ui_state.ref.title);
+            var $list = $(selectors.list);
+            $list.children('li.stored-chapter').remove();
+            ui_state.ref.eachChapter(function (chapter_ref) {
                 var link = $('<a/>', {
                     class: 'showFullText',
-                    text: obj.name,
-                    click: function () { alert('path on filesystem is ' + obj.path); }
+                    text: chapter_ref.name,
+                    click: function () {
+                        alert('path on filesystem is ' + chapter_ref.path);
+                    }
                 });
                 $('<li/>', {
                     class: 'stored-chapter',
@@ -283,11 +304,27 @@ function StoredBooksPageGenerator(args) {
             });
             $list.listview('refresh');
         });
-    };
+    }
 }
 
-var storedBooksPageGenerator = new StoredBooksPageGenerator({bookReferenceManager: bookReferenceManager});
-storedBooksPageGenerator.registerEvents({list: '#stored-books-list', page: '#storedBooks'});
+var ui_state = {},
+    storedBooksPageGenerator = new StoredBooksPageGenerator({
+        bookReferenceManager: bookReferenceManager,
+        ui_state: ui_state
+    }),
+    storedChaptersPageGenerator = new StoredChaptersPageGenerator({
+        ui_state: ui_state
+    });
+
+storedBooksPageGenerator.registerEvents({
+    list: '#stored-books-list',
+    page: '#storedBooks'
+});
+storedChaptersPageGenerator.registerEvents({
+    header_title: '.chapter-title',
+    list: '#stored-chapters-list',
+    page: '#storedChapters'
+});
 
 function BookPlayerPageGenerator(args) {
     var args = args || {};
@@ -343,12 +380,12 @@ $(document).on("pagecreate", "#homeFileManager", function () {
     fileManager.displayAppFiles();
 });
 
-function FileManager (storage_device) {
+function FileManager(storage_device) {
     var that = this;
-    
+
     this.displayAppFiles = function () {
         var times_called = 0;
-        var enumeration_cb = function(result) {
+        var enumeration_cb = function (result) {
             times_called++;
             fileListItem = $('<li>' + result.name + '</li>');
             $("#downloadedFiles").append(fileListItem);
@@ -402,7 +439,9 @@ function FileManager (storage_device) {
         that.enumerateFiles({
             match: /librifox\/.*/,
             func_each: enumeration_cb,
-            func_done: function () {that.displayAppFiles();}
+            func_done: function () {
+                that.displayAppFiles();
+            }
         });
     }
 }
@@ -425,7 +464,7 @@ function SearchResltsPageGenerator(args) {
             });
         });
     }
-    
+
     this.displayResults = function (search_string) {
         $(results_selector).empty();
         getSearchJSON(search_string, function (books) {
