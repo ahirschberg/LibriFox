@@ -1,0 +1,32 @@
+{
+  "name": "LibriFox",
+  "version": "0.0.0",
+  "description": "LibriFox is a Firefox OS audio book player for LibriVox audio books.",
+  "main": "index.js",
+  "dependencies": {},
+  "devDependencies": {
+    "mocha": "^2.2.1",
+    "chai": "^2.1.2",
+    "karma-cli": "^0.0.4",
+    "karma-chai": "^0.1.0",
+    "karma": "^0.12.31",
+    "karma-sinon": "^1.0.4",
+    "karma-mocha": "^0.1.10",
+    "karma-firefox-launcher": "^0.1.4",
+    "sinon": "^1.14.1",
+    "sinon-chai": "^2.7.0"
+  },
+  "scripts": {
+    "test": "karma"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahirschberg/LibriFox.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ahirschberg/LibriFox/issues"
+  },
+  "homepage": "https://github.com/ahirschberg/LibriFox"
+}
