@@ -16,18 +16,13 @@
 </head>
 
 <body>
-    <div data-role="page" id="homeBook">
-        <header data-role="header" id="homeHeaderBook">
-            <h1>LibriFox Player</h1>
+    <div data-role="page" id="book-player">
+        <header data-role="header">
+            <h1 class="book-player-header">LibriFox Player</h1>
             <a data-rel="back" data-icon="back" data-iconpos="notext"></a>
         </header>
         <section>
             <audio id="audioSource" preload="metadata" controls type="audio/mpeg"></audio>
-            <button id="downloadPart">Download Part</button>
-            <!--input id="downloadProgress" data-highlight="true" min="0" max="100" value="0" type="range" data-mini="true" disabled/-->
-            <div class="progressBar">
-                <div class="progressBarSlider"></div>
-            </div>
         </section>
     </div>
 </body>

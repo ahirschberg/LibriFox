@@ -20,7 +20,6 @@ function Chapter(args) {
     this.name = stripHTMLTags((name_match && name_match[1]) || args.name); // if regex doesn't match, fall back to raw string
     this.index = args.index;
     this.url = args.url;
-    this.position = 0;
 }
 Chapter.parseFromXML = function (xml_string) {
     var xml = $(xml_string),
@@ -287,7 +286,7 @@ function StoredBooksPageGenerator(args) {
                     text: obj.title,
                     href: 'stored_chapters.html',
                     click: function () {
-                        ui_state.ref = obj
+                        ui_state.book_ref = obj
                     }
                 });
                 $('<li/>', {
@@ -312,15 +311,16 @@ function StoredChaptersPageGenerator(args) {
         }
         $(document).on('pageshow', selectors.page, function () {
             console.log('storedChapters shown');
-            $(selectors.header_title).text(ui_state.ref.title);
+            $(selectors.header_title).text(ui_state.book_ref.title);
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
-            ui_state.ref.eachChapter(function (chapter_ref) {
+            ui_state.book_ref.eachChapter(function (chapter_ref) {
                 var link = $('<a/>', {
                     class: 'showFullText',
+                    href: 'book.html',
                     text: chapter_ref.name,
                     click: function () {
-                        alert('path on filesystem is ' + chapter_ref.path);
+                        ui_state.chapter_ref = chapter_ref;
                     }
                 });
                 $('<li/>', {
@@ -333,7 +333,35 @@ function StoredChaptersPageGenerator(args) {
     }
 }
 
+function BookPlayerPageGenerator(args) {
+    var ui_state = args.ui_state;
 
+    this.generatePage = function (audio_url, chapter_name) {
+        $(args.selectors.audio).prop("src", audio_url);
+        $(args.selectors.header).text(chapter_name);
+        /*$(audioSource).on("timeupdate", function () {
+            chapter_obj.position = this.currentTime;
+        });*/
+    };
+
+    this.registerEvents = function (selectors) {
+        $(document).on("pagecreate", selectors.page, function (event) {
+            if (!ui_state.chapter_ref) {
+                console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
+                return false;
+            }
+            var sdcard = lf_getDeviceStorage();
+            var request = sdcard.get(ui_state.chapter_ref.path);
+            request.onsuccess = function () {
+                var file = this.result;
+                bookPlayerPageGenerator.generatePage(URL.createObjectURL(file), ui_state.chapter_ref.name);
+            };
+            request.onerror = function () {
+                console.log(this.error);
+            };
+        });
+    };
+}
 
 var ui_state = {},
     storedBooksPageGenerator = new StoredBooksPageGenerator({
@@ -341,6 +369,13 @@ var ui_state = {},
         ui_state: ui_state
     }),
     storedChaptersPageGenerator = new StoredChaptersPageGenerator({
+        ui_state: ui_state
+    }),
+    bookPlayerPageGenerator = new BookPlayerPageGenerator({
+        selectors: {
+            audio: '#audioSource',
+            header: '.book-player-header'
+        },
         ui_state: ui_state
     });
 
@@ -353,52 +388,12 @@ storedChaptersPageGenerator.registerEvents({
     list: '#stored-chapters-list',
     page: '#storedChapters'
 });
+bookPlayerPageGenerator.registerEvents({page: '#book-player'});
 
-function BookPlayerPageGenerator(args) {
-    var args = args || {};
 
-    var dlFullBook = args.selectors.dlFullBook;
-    var dlChapter = args.selectors.dlChapter;
-    var audioSource = args.selectors.audioSource;
 
-    var bookDownloadManager = args.bookDownloadManager;
 
-    this.generatePage = function (page_args) {
-        var page_args = page_args;
-        var book_obj = page_args.book;
-        var chapter_obj = page_args.chapter;
 
-        $(dlChapter).click(function () {
-            bookDownloadManager.downloadChapter(book_obj, chapter_obj);
-        });
-
-        $(audioSource).prop("src", chapter_obj.url);
-        $(audioSource).on("timeupdate", function () {
-            chapter_obj.position = this.currentTime;
-        });
-    }
-}
-
-bookPlayerArgs = {
-    'bookDownloadManager': bookDownloadManager,
-    'selectors': {
-        'dlFullBook': '#downloadFullBook',
-        'dlChapter': '#downloadPart',
-        'audioSource': '#audioSource',
-    }
-};
-var bookPlayerPageGenerator = new BookPlayerPageGenerator(bookPlayerArgs);
-
-$(document).on("pagecreate", "#homeBook", function (event) {
-    if (!appUIState.currentBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
-        console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
-        return false;
-    }
-    bookPlayerPageGenerator.generatePage({
-        book: appUIState.currentBook,
-        chapter: appUIState.currentChapter
-    });
-});
 
 var fileManager = new FileManager(lf_getDeviceStorage());
 $(document).on("pagecreate", "#homeFileManager", function () {
