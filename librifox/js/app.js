@@ -57,11 +57,12 @@ var appUIState = new UIState({
 });
 
 function ChaptersListPageGenerator(args) {
-    var args = args || {};
-    var httpRequestHandler = args.httpRequestHandler;
-    var list_selector = args.list_selector;
-    var header_selector = args.header_selector;
-    var bookDownloadManager = args.bookDownloadManager;
+    var httpRequestHandler = args.httpRequestHandler,
+        list_selector = args.list_selector,
+        header_selector = args.header_selector,
+        bookDownloadManager = args.bookDownloadManager,
+        PROGRESSBAR_HTML =  '<div class="progressBar" style="display: none">' +
+                            '<div class="progressBarSlider"></div></div>';
 
     this.generatePage = function (book) {
         $(header_selector).text(book.title); // untested, TODO update tests
@@ -88,7 +89,7 @@ function ChaptersListPageGenerator(args) {
                     });
                 }
             });
-        $dl_all.append('<div class="progressBar"><div class="progressBarSlider"></div></div>');
+        $dl_all.append(PROGRESSBAR_HTML);
         
         $(list_selector).append($dl_all);
         $.each(book.chapters, function (index, chapter) {
@@ -98,12 +99,20 @@ function ChaptersListPageGenerator(args) {
     };
 
     function generateChapterListItem(book, chapter) {
-        var chapterListItem = $('<li class="chapter-listing" chapter-index=' + chapter.index + '><a><h2>' + chapter.name + '</h2></a><div class="progressBar"><div class="progressBarSlider"></div></div></li>');
-        chapterListItem.click(function () {
+        var $chapterListItem = $('<li/>')
+            .addClass('chapter-listing')
+            .attr('chapter-index', chapter.index)
+            .html(
+                $('<a/>')
+                    .append($('<h2/>', {text: chapter.name}))
+                    .append(PROGRESSBAR_HTML)
+                );
+            
+        $chapterListItem.click(function () {
             downloadChapterWithCbk(book, chapter, this);
         });
-        $(list_selector).append(chapterListItem);
-    };
+        $(list_selector).append($chapterListItem);
+    }
     
     function downloadChapterWithCbk(book, chapter, that) {
         return bookDownloadManager.downloadChapter(
@@ -112,6 +121,7 @@ function ChaptersListPageGenerator(args) {
             function (event) { // move this into a new object
                 if (event.lengthComputable) {
                     var percentage = (event.loaded / event.total) * 100;
+                    $(that).find('.progressBar').show();
                     $(that).find('.progressBarSlider').css('width', percentage + '%');
                 }
             });
@@ -343,15 +353,12 @@ function BookPlayerPageGenerator(args) {
     this.generatePage = function (audio_url, chapter_name) {
         $(args.selectors.audio).prop("src", audio_url);
         $(args.selectors.header).text(chapter_name);
-        /*$(audioSource).on("timeupdate", function () {
-            chapter_obj.position = this.currentTime;
-        });*/
     };
 
     this.registerEvents = function (selectors) {
         $(document).on("pagecreate", selectors.page, function (event) {
             if (!ui_state.chapter_ref) {
-                console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
+                console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
                 return false;
             }
             var sdcard = lf_getDeviceStorage();
