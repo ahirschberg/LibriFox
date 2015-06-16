@@ -77,16 +77,20 @@ function ChaptersListPageGenerator(args) {
     };
 
     function showLocalChapters(book) {
-        $(list_selector).append($('<li/>', {
-            html: $('<a/>', {
-                text: 'Download all chapters (WIP)'
-            }),
-            click: function () {
-                book.chapters.forEach(function (chapter) {
-                    downloadChapterWithCbk(book,chapter);
-                });
-            }
-        }));
+        var $dl_all = $('<li/>', {
+                html: $('<a/>', {
+                    text: 'Download all chapters (WIP)'
+                }),
+                click: function () {
+                    var that = this;
+                    book.chapters.forEach(function (chapter) {
+                        downloadChapterWithCbk(book, chapter, that);
+                    });
+                }
+            });
+        $dl_all.append('<div class="progressBar"><div class="progressBarSlider"></div></div>');
+        
+        $(list_selector).append($dl_all);
         $.each(book.chapters, function (index, chapter) {
             generateChapterListItem(book, chapter, this);
         });
@@ -391,12 +395,8 @@ storedChaptersPageGenerator.registerEvents({
 bookPlayerPageGenerator.registerEvents({page: '#book-player'});
 
 
-
-
-
-
 var fileManager = new FileManager(lf_getDeviceStorage());
-$(document).on("pagecreate", "#homeFileManager", function () {
+$(document).on("pageshow", "#homeFileManager", function () {
     $('#deleteAll').click(function () {
         fileManager.deleteAllAppFiles();
         localStorage.clear(); // remove references
@@ -458,7 +458,15 @@ function FileManager(storage_device) {
     this.deleteAllAppFiles = function () {
         var enumeration_cb = function (result) {
             console.log(result.name + ' will be deleted');
-            storage_device.delete(result.name);
+            var request = storage_device.delete(result.name);
+
+            request.onsuccess = function () {
+                console.log("File deleted");
+            }
+
+            request.onerror = function () {
+                console.log("Unable to delete the file: " + this.error);
+            }
         }
         that.enumerateFiles({
             match: /librifox\/.*/,
