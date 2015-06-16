@@ -15,7 +15,7 @@ var CHAPTERS_ARR = [
 ];
 var CHAPTER_OBJECT = CHAPTERS_ARR[0];
 
-var WEB_RESP = { 
+var WEB_RESP = {
     audio_blob: {
         size: 4001234,
         type: 'audio/mpeg'
@@ -28,10 +28,10 @@ var WEB_RESP = {
     },
     book_xml:
         '<rss> <channel>' +
-        '<item> <title><![CDATA[Chapter 01]]></title>' +
+        '<item> <title><![CDATA[Chapter 01]]></title>' + // Chapter 01
         '<enclosure url="http://example.com/ch1.mp3" length="4.2MB" type="audio/mpeg" />' +
         '</item>' +
-        '<item> <title><![CDATA[Chapter 02]]></title>' +
+        '<item> <title><![CDATA[Chapter 02]]></title>' + // Chapter 02
         '<enclosure url="http://example.com/ch2.mp3" length="4.4MB" type="audio/mpeg" />' +
         '</item>' +
         '</channel> </rss>',

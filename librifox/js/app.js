@@ -17,11 +17,29 @@ function Book(args) {
 function Chapter(args) {
     var name_regex = /^<!\[CDATA\[(.*)\]\]>$/;
     var name_match = name_regex.exec(args.name);
-    this.name = stripHTMLTags(name_match[1] || args.name); // if regex doesn't match, fall back to raw string
-    this.index = args.index; // TODO: Add whenever this method is called, return current chapter or get it if not available
+    this.name = stripHTMLTags((name_match && name_match[1]) || args.name); // if regex doesn't match, fall back to raw string
+    this.index = args.index;
     this.url = args.url;
     this.position = 0;
 }
+Chapter.parseFromXML = function (xml_string) {
+    var xml = $(xml_string),
+        $items = xml.find("item"),
+        chapters = [];
+
+    $items.each(function (index, element) {
+        var $title = $(element).find("title");
+        var $enclosure = $(element).find("enclosure");
+        var chapter = new Chapter({
+            'index': chapters.length,
+            'name': $title.text(),
+            'url': $enclosure.attr('url')
+        });
+        chapters.push(chapter);
+    });
+    
+    return chapters;
+};
 
 function UIState(args) {
     this.currentBook = args.currentBook;
@@ -79,7 +97,6 @@ function ChaptersListPageGenerator(args) {
     function generateChapterListItem(book, chapter) {
         var chapterListItem = $('<li class="chapter-listing" chapter-index=' + chapter.index + '><a><h2>' + chapter.name + '</h2></a><div class="progressBar"><div class="progressBarSlider"></div></div></li>');
         chapterListItem.click(function () {
-            console.log(this);
             downloadChapterWithCbk(book, chapter, this);
         });
         $(list_selector).append(chapterListItem);
@@ -99,20 +116,8 @@ function ChaptersListPageGenerator(args) {
 
     function getChaptersFromFeed(book_id, callback_func) {
         httpRequestHandler.getXML("https://librivox.org/rss/" + encodeURIComponent(book_id), function (xhr) {
-            var xml = $(xhr.response),
-                $items = xml.find("item"),
-                chapters = [];
-
-            $items.each(function (index, element) {
-                var $title = $(element).find("title");
-                var $enclosure = $(element).find("enclosure");
-                var chapter = new Chapter({
-                    'index': chapters.length,
-                    'name': $title.text(),
-                    'url': $enclosure.attr('url')
-                });
-                chapters.push(chapter);
-            });
+            var xml = $(xhr.response)
+            chapters = Chapter.parseFromXML(xml);
             callback_func(chapters);
         });
     };
@@ -399,6 +404,7 @@ var fileManager = new FileManager(lf_getDeviceStorage());
 $(document).on("pagecreate", "#homeFileManager", function () {
     $('#deleteAll').click(function () {
         fileManager.deleteAllAppFiles();
+        localStorage.clear(); // remove references
     });
     fileManager.displayAppFiles();
 });
