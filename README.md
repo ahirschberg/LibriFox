@@ -1,7 +1,10 @@
 # LibriFox
-LibriFox is a Firefox OS audio book player for LibriVox audio books.
+LibriFox is a native Firefox OS audio book player powered by LibriVox.org.
 
 ## Current Features:
-* Fully loading audiobook search
-* Audiobook playing feature
-* App remembers your place in the book
+* Search for books by title
+* Download chapters individually or all at once
+* View and listen to downloaded chapters
+
+## Note:
+In order to run this app, add the ```librifox/``` directory (one level down from root) as a packaged web app in the Firefox OS WebIDE

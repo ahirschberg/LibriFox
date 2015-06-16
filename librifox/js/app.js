@@ -465,7 +465,7 @@ function FileManager(storage_device) {
             }
 
             request.onerror = function () {
-                console.log("Unable to delete the file: " + this.error);
+                console.log("Unable to delete the file: ", this.error);
             }
         }
         that.enumerateFiles({

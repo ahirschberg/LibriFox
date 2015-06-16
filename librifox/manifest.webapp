@@ -1,32 +1,37 @@
 {
-  "version": "0.2.0",
-  "name": "LibriFox",
-  "description": "A port of the LibriVox app for Firefox OS",
-  "launch_path": "/index.html",
-  "icons": {
-    "16": "/img/icons/icon16x16.png",
-    "48": "/img/icons/icon48x48.png",
-    "60": "/img/icons/icon60x60.png",
-    "128": "/img/icons/icon128x128.png"
-  },
-  "developer": {
-    "name": "Finn Cardiff and Alex Hirschberg",
-    "url": "http://arltechinnovation.us"
-  },
-  "type": "privileged",
-  "permissions": {
-    "systemXHR": {"description": "Necessary for fetching data from the LibriVox server"},
-      "device-storage:sdcard":{"access": "readwrite", "description": "used for reading and writing of audiobooks to sdcard"}
-  },
-  "installs_allowed_from": [
+    "version": "0.5.0",
+    "name": "LibriFox",
+    "description": "A port of the LibriVox app for Firefox OS",
+    "launch_path": "/index.html",
+    "icons": {
+        "16": "/img/icons/icon16x16.png",
+        "48": "/img/icons/icon48x48.png",
+        "60": "/img/icons/icon60x60.png",
+        "128": "/img/icons/icon128x128.png"
+    },
+    "developer": {
+        "name": "Finn Cardiff and Alex Hirschberg",
+        "url": "http://arltechinnovation.us"
+    },
+    "type": "privileged",
+    "permissions": {
+        "systemXHR": {
+            "description": "Necessary for fetching data from the LibriVox server"
+        },
+        "device-storage:sdcard": {
+            "access": "readwrite",
+            "description": "used for reading and writing of audiobooks to sdcard"
+        }
+    },
+    "installs_allowed_from": [
     "*"
   ],
-  "locales": {
-    "es": {
-      "name": "LibriFox",
-      "description": "Una aplicación de LibriVox para Firefox OS",
-      "permissions": {}
-    }
-  },
-  "default_locale": "en"
+    "locales": {
+        "es": {
+            "name": "LibriFox",
+            "description": "Una aplicación de LibriVox para Firefox OS",
+            "permissions": {}
+        }
+    },
+    "default_locale": "en"
 }
