@@ -1,7 +1,7 @@
 {
     "version": "0.5.0",
     "name": "LibriFox",
-    "description": "A port of the LibriVox app for Firefox OS",
+    "description": "An audiobooks app powered by LibriVox.org",
     "launch_path": "/index.html",
     "icons": {
         "16": "/img/icons/icon16x16.png",
@@ -10,7 +10,7 @@
         "128": "/img/icons/icon128x128.png"
     },
     "developer": {
-        "name": "Finn Cardiff and Alex Hirschberg",
+        "name": "Alex Hirschberg and Finn Cardiff",
         "url": "http://arltechinnovation.us"
     },
     "type": "privileged",
@@ -27,11 +27,6 @@
     "*"
   ],
     "locales": {
-        "es": {
-            "name": "LibriFox",
-            "description": "Una aplicación de LibriVox para Firefox OS",
-            "permissions": {}
-        }
     },
     "default_locale": "en"
 }

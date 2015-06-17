@@ -137,9 +137,9 @@ function ChaptersListPageGenerator(args) {
 }
 
 function BookDownloadManager(args) {
-    var that = this;
-    var httpRequestHandler = args.httpRequestHandler;
-    var storageManager = args.storageManager;
+    var that = this,
+        httpRequestHandler = args.httpRequestHandler,
+        storageManager = args.storageManager;
 
     function downloadFile(url, finished_callback, progress_callback) {
         var req_progress_callback;
@@ -194,13 +194,26 @@ function BookStorageManager(args) {
         referenceManager.storeJSONReference(book_obj, chapter_obj, chPath);
     };
 
-    this.write = function (blob, path) { // should be moved to different object
+    this.write = function (blob, path) {
+        console.log('writing:', blob, path);
         var request = storageDevice.addNamed(blob, path);
         if (request) {
             request.onsuccess = function () {
                 console.log('wrote: ' + this.result);
             };
         }
+    };
+    
+    this.delete = function (path, success_fn, error_fn) {
+        var request = storageDevice.delete(path);
+        request.onsuccess = function () {
+            console.log("File deleted: " + path);
+            success_fn && success_fn();
+        };
+        request.onerror = function () {
+            console.log("Unable to delete the file at " + path, this.error);
+            error_fn && error_fn(this.error);
+        };
     };
 
     this.getChapterFilePath = function (book_id, chapter_index) {
@@ -211,19 +224,18 @@ function BookStorageManager(args) {
 function BookReferenceManager(args) {
     var args = args || {},
         local_storage = args.localStorage || localStorage,
-        that = this;
+        that = this,
+        storageManager = args.storageManager;
     this.JSON_PREFIX = 'bookid_';
 
     this.storeJSONReference = function (book_obj, chapter_obj, path) {
         if (!isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
-        var obj = that.loadJSONReference(book_obj.id);
-        if (!obj) {
-            obj = {
-                title: book_obj.title
-            };
-        }
+        var obj   = that.loadJSONReference(book_obj.id) || {};
+        obj.title = obj.title || book_obj.title;
+        obj.id    = obj.id    || book_obj.id;
+        
         if (!isValidIndex(chapter_obj.index)) {
             throw new Error('chapter_obj.index is not a valid index: ' + chapter_obj.index);
         }
@@ -249,6 +261,10 @@ function BookReferenceManager(args) {
             }
         });
     };
+    
+    this.registerStorageManager = function (_storageManager) {
+        storageManager = _storageManager;
+    };
 
     function applyHelperFunctions(book_ref) {
         book_ref.eachChapter = function (each_fn) {
@@ -258,6 +274,22 @@ function BookReferenceManager(args) {
                 }
             });
         };
+        
+        book_ref.deleteChapter = function (index, success_fn) {
+            var this_book_ref = this;
+            storageManager.delete(this_book_ref[index].path,
+                function () {
+                    delete this_book_ref[index];
+                    var key = that.JSON_PREFIX + this_book_ref.id;
+                    console.log(key, index, JSON.stringify(this_book_ref));
+                    local_storage.setItem(key, JSON.stringify(this_book_ref));
+                    success_fn();
+                },
+                function (err) {
+                    alert('Error deleting chapter with index ' + index + '. ' + err.name)
+                });
+            
+        };
         return book_ref;
     }
 
@@ -265,14 +297,17 @@ function BookReferenceManager(args) {
         return /^\d+$/.test(index)
     }
 }
-var bookReferenceManager = new BookReferenceManager(),
+var bookReferenceManager = new BookReferenceManager({
+        storageManager: bookStorageManager
+    }),
     bookStorageManager = new BookStorageManager({
         storageDevice: lf_getDeviceStorage(),
         referenceManager: bookReferenceManager
     }),
     bookDownloadManager = new BookDownloadManager({
         httpRequestHandler: httpRequestHandler,
-        storageManager: bookStorageManager
+        storageManager: bookStorageManager,
+        referenceManager: bookReferenceManager
     }),
     chaptersListGen = new ChaptersListPageGenerator({
         'httpRequestHandler': httpRequestHandler,
@@ -280,6 +315,7 @@ var bookReferenceManager = new BookReferenceManager(),
         'header_selector': '#chapterHeader',
         'bookDownloadManager': bookDownloadManager
     });
+bookReferenceManager.registerStorageManager(bookStorageManager);
 
 function StoredBooksPageGenerator(args) {
     var that = this,
@@ -310,8 +346,6 @@ function StoredBooksPageGenerator(args) {
             });
             $list.listview('refresh');
         });
-
-
     };
 }
 
@@ -323,12 +357,12 @@ function StoredChaptersPageGenerator(args) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
-        $(document).on('pageshow', selectors.page, function () {
+        $(document).on('pageshow', selectors.page, function () {    
             console.log('storedChapters shown');
             $(selectors.header_title).text(ui_state.book_ref.title);
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
-            ui_state.book_ref.eachChapter(function (chapter_ref) {
+            ui_state.book_ref.eachChapter(function (chapter_ref, index) {
                 var link = $('<a/>', {
                     class: 'showFullText',
                     href: 'book.html',
@@ -336,6 +370,12 @@ function StoredChaptersPageGenerator(args) {
                     click: function () {
                         ui_state.chapter_ref = chapter_ref;
                     }
+                }).bind('taphold', function () {
+                    var that = this;
+                    ui_state.book_ref.deleteChapter(index, function () {
+                        $(that).parent().remove();
+                        $(selectors.page + ' ul').listview('refresh');
+                    })
                 });
                 $('<li/>', {
                     class: 'stored-chapter',
@@ -344,11 +384,12 @@ function StoredChaptersPageGenerator(args) {
             });
             $list.listview('refresh');
         });
-    }
+    };
 }
 
 function BookPlayerPageGenerator(args) {
-    var ui_state = args.ui_state;
+    var ui_state = args.ui_state,
+        page;
 
     this.generatePage = function (audio_url, chapter_name) {
         $(args.selectors.audio).prop("src", audio_url);
@@ -356,6 +397,8 @@ function BookPlayerPageGenerator(args) {
     };
 
     this.registerEvents = function (selectors) {
+        page = selectors.page;
+        console.log('test');
         $(document).on("pagecreate", selectors.page, function (event) {
             if (!ui_state.chapter_ref) {
                 console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
@@ -365,11 +408,25 @@ function BookPlayerPageGenerator(args) {
             var request = sdcard.get(ui_state.chapter_ref.path);
             request.onsuccess = function () {
                 var file = this.result;
-                bookPlayerPageGenerator.generatePage(URL.createObjectURL(file), ui_state.chapter_ref.name);
+                var file_url = ui_state.file_url = URL.createObjectURL(file);
+                bookPlayerPageGenerator.generatePage(file_url, ui_state.chapter_ref.name);
             };
             request.onerror = function () {
                 console.log(this.error);
             };
+        });
+        $(document).on('pagebeforehide', selectors.page, function (event) {
+            console.log('pagehide called - revoking url for ' + ui_state.file_url);
+            URL.revokeObjectURL(ui_state.file_url);
+            
+            /* 
+             * For whatever reason, this is required, otherwise mp3s that have been loaded cannot be deleted.
+             * I don't really know why this is necessary, and why revoking the object url isn't enough, but
+             * it isn't.  Oh, Firefox OS...
+             * Also, if the app is crashed or forced closed, this event doesn't fire and the user can't delete
+             * the file until they restart their phone (?)
+             */
+            $(args.selectors.audio).prop("src", '');
         });
     };
 }
@@ -472,7 +529,7 @@ function FileManager(storage_device) {
             }
 
             request.onerror = function () {
-                console.log("Unable to delete the file: ", this.error);
+                console.log("Unable to delete the file: " + result.name, this.error);
             }
         }
         that.enumerateFiles({
