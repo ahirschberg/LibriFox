@@ -334,7 +334,7 @@ function BookReferenceManager(args) {
                     chapter.path,
                     function () {
                         delete this_book_ref[index];
-                        finalize_deletions_if_ready(index)
+                        finalize_deletions_if_ready(index);
                     },
                     function (err) {
                         console.error('Error deleting chapter with index ' + index + '. ' + err.name);
