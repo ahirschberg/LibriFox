@@ -226,8 +226,8 @@ function BookReferenceManager(args) {
     var args = args || {},
         local_storage = args.localStorage || localStorage,
         that = this,
-        storageManager = args.storageManager;
-    this.JSON_PREFIX = 'bookid_';
+        storageManager = args.storageManager,
+        JSON_PREFIX = this.JSON_PREFIX = 'bookid_';
 
     this.storeJSONReference = function (book_obj, chapter_obj, path) {
         if (!isValidIndex(book_obj.id)) {
@@ -244,18 +244,18 @@ function BookReferenceManager(args) {
             path: path,
             name: chapter_obj.name
         };
-        local_storage.setItem(that.JSON_PREFIX + book_obj.id, JSON.stringify(obj));
+        local_storage.setItem(JSON_PREFIX + book_obj.id, JSON.stringify(obj));
     };
 
     this.loadJSONReference = function (book_id) {
-        var book_ref = JSON.parse(local_storage.getItem(that.JSON_PREFIX + book_id));
+        var book_ref = JSON.parse(local_storage.getItem(JSON_PREFIX + book_id));
         return book_ref && applyHelperFunctions(book_ref);
     };
 
     this.eachReference = function (each_fn) {
         Object.keys(local_storage).forEach(function (key) {
             console.log(key);
-            if (key.startsWith(that.JSON_PREFIX) && local_storage.hasOwnProperty(key)) {
+            if (key.startsWith(JSON_PREFIX) && local_storage.hasOwnProperty(key)) {
                 var book_ref = JSON.parse(local_storage.getItem(key));
                 applyHelperFunctions(book_ref);
                 each_fn(book_ref);
@@ -271,7 +271,7 @@ function BookReferenceManager(args) {
         book_ref.eachChapter = function (each_fn) {
             Object.keys(book_ref).forEach(function (key) {
                 if (isValidIndex(key) && book_ref.hasOwnProperty(key)) {
-                    each_fn(book_ref[key], key);
+                    each_fn(book_ref[key], parseInt(key, 10));
                 }
             });
         };
@@ -281,14 +281,58 @@ function BookReferenceManager(args) {
             storageManager.delete(this_book_ref[index].path,
                 function () {
                     delete this_book_ref[index];
-                    var key = that.JSON_PREFIX + this_book_ref.id;
+                    var key = JSON_PREFIX + this_book_ref.id;
                     local_storage.setItem(key, JSON.stringify(this_book_ref));
                     success_fn();
                 },
                 function (err) {
                     alert('Error deleting chapter with index ' + index + '. ' + err.name)
                 });
-            
+        };
+        
+                    
+        // TURN BACK, ALL YE WHO ENTER HERE
+        book_ref.deleteBook = function (success_fn, error_fn) {
+            var this_book_ref = this,
+                errors = false;
+
+            // oh my this is horrible, forced to do this because of FXOS filesystem error possibility
+            var num_chapters = 0,
+                chapters_attempted_removal = 0,
+                finalize_deletions_if_ready = function (index) {
+                    chapters_attempted_removal += 1;
+                    if (chapters_attempted_removal >= num_chapters) {
+                        if (!errors) {
+                            // only remove JSON once all chapters have been successfully removed
+                            console.log('Completely removing book with id ' + this_book_ref.id);
+                            local_storage.removeItem(JSON_PREFIX + this_book_ref.id);
+
+                            success_fn && success_fn();
+                        } else {
+                            console.warn('Unable to fully remove book "' + this_book_ref.title + '". Errors were encountered when attempting to delete files.');
+                            local_storage.setItem(JSON_PREFIX + this_book_ref.id, JSON.stringify(this_book_ref));
+
+                            error_fn && error_fn();
+                        }
+                    }
+                };
+            this_book_ref.eachChapter(function (chapter, index) { // get the number of chapters that will be iterated over
+                num_chapters += 1;
+            });
+
+            this_book_ref.eachChapter(function (chapter, index) {
+                storageManager.delete(
+                    chapter.path,
+                    function () {
+                        delete this_book_ref[index];
+                        finalize_deletions_if_ready(index)
+                    },
+                    function (err) {
+                        console.error('Error deleting chapter with index ' + index + '. ' + err.name);
+                        errors = true;
+                        finalize_deletions_if_ready(index);
+                    });
+            });
         };
         return book_ref;
     }
@@ -342,6 +386,15 @@ function StoredBooksPageGenerator(args) {
                 $('<li/>', {
                     'class': 'stored-book',
                     html: link
+                }).bind('taphold', function () {
+                    var that = this;
+                    obj.deleteBook(function () {
+                        $(that).remove();
+                        $list.listview('refresh');
+                    },
+                    function () {
+                        alert('Not all the chapters could be deleted, likely a Firefox OS filesystem issue. Retry after restarting your device.');
+                    });
                 }).appendTo($list);
             });
             $list.listview('refresh');
