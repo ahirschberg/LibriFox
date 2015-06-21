@@ -1,3 +1,10 @@
+// disables firefox taphold popup menu in firefox os 2.2+
+window.oncontextmenu = function(event) {
+     event.preventDefault();
+     event.stopPropagation();
+     return false;
+};
+
 var bookCache = {};
 var httpRequestHandler = new HttpRequestHandler();
 
@@ -294,11 +301,15 @@ function BookReferenceManager(args) {
         // TURN BACK, ALL YE WHO ENTER HERE
         book_ref.deleteBook = function (success_fn, error_fn) {
             var this_book_ref = this,
-                errors = false;
-
-            // oh my this is horrible, forced to do this because of FXOS filesystem error possibility
-            var num_chapters = 0,
-                chapters_attempted_removal = 0,
+                errors = false,
+                num_chapters = 0;
+            this_book_ref.eachChapter(function (chapter, index) { // get the number of chapters that will be iterated over
+                num_chapters += 1;
+            });
+            
+            // oh my this is horrible, forced to do this because of FXOS filesystem
+            // error possibility on the 2.0 browser (seems fixed on 2.2)
+            var chapters_attempted_removal = 0,
                 finalize_deletions_if_ready = function (index) {
                     chapters_attempted_removal += 1;
                     if (chapters_attempted_removal >= num_chapters) {
@@ -316,9 +327,7 @@ function BookReferenceManager(args) {
                         }
                     }
                 };
-            this_book_ref.eachChapter(function (chapter, index) { // get the number of chapters that will be iterated over
-                num_chapters += 1;
-            });
+
 
             this_book_ref.eachChapter(function (chapter, index) {
                 storageManager.delete(
