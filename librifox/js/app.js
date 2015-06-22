@@ -91,12 +91,13 @@ function ChaptersListPageGenerator(args) {
                 }),
                 click: function () {
                     var that = this;
+                    $(that).unbind('click');
                     book.chapters.forEach(function (chapter) {
                         var chapter_list_element = $('[chapter-index="' + chapter.index + '"]');
                         downloadChapterWithCbk(book, chapter, chapter_list_element);
                     });
                 }
-            });
+            }).attr('data-icon', 'arrow-d');
         $dl_all.append(PROGRESSBAR_HTML);
         
         $(list_selector).append($dl_all);
@@ -114,7 +115,8 @@ function ChaptersListPageGenerator(args) {
                 $('<a/>')
                     .append($('<h2/>', {text: chapter.name}))
                     .append(PROGRESSBAR_HTML)
-                );
+                )
+            .attr('data-icon', 'arrow-d');
             
         $chapterListItem.click(function () {
             downloadChapterWithCbk(book, chapter, this);
@@ -123,6 +125,7 @@ function ChaptersListPageGenerator(args) {
     }
     
     function downloadChapterWithCbk(book, chapter, that) {
+        $(that).unbind('click');
         return bookDownloadManager.downloadChapter(
             book,
             chapter,
@@ -397,16 +400,30 @@ function StoredBooksPageGenerator(args) {
                     html: link
                 }).bind('taphold', function () {
                     var that = this;
-                    obj.deleteBook(function () {
-                        $(that).remove();
-                        $list.listview('refresh');
-                    },
-                    function () {
-                        alert('Not all the chapters could be deleted, likely a Firefox OS filesystem issue. Retry after restarting your device.');
+                    $(selectors.popup_options).popup('open', {
+                        transition: 'pop',
+                        positionTo: that // neat, positions over the held element!
+                    });
+                    $(selectors.popup_options + ' .delete_book').click(function () {
+                        obj.deleteBook(function () {
+                            $(that).remove();
+                            $list.listview('refresh');
+                        },
+                        function () {
+                            alert('Not all the chapters could be deleted, likely a Firefox OS filesystem issue. Retry after restarting your device.');
+                        });
+                        $(selectors.popup_options).popup('close');
                     });
                 }).appendTo($list);
             });
             $list.listview('refresh');
+        });
+        $(document).on('pagecreate', selectors.page, function () {
+            $(selectors.popup_options).bind({
+                popupafterclose: function (event, ui) {
+                    $(selectors.popup_options + ' .delete_book').unbind('click');
+                }
+            });
         });
     };
 }
@@ -419,7 +436,7 @@ function StoredChaptersPageGenerator(args) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
-        $(document).on('pageshow', selectors.page, function () {    
+        $(document).on('pageshow', selectors.page, function () {
             $(selectors.header_title).text(ui_state.book_ref.title);
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
@@ -431,19 +448,33 @@ function StoredChaptersPageGenerator(args) {
                     click: function () {
                         ui_state.chapter_ref = chapter_ref;
                     }
-                }).bind('taphold', function () {
-                    var that = this;
-                    ui_state.book_ref.deleteChapter(index, function () {
-                        $(that).parent().remove();
-                        $(selectors.page + ' ul').listview('refresh');
-                    })
                 });
                 $('<li/>', {
                     'class': 'stored-chapter',
                     html: link
+                }).bind('taphold', function () {
+                    var that = this;
+                    $(selectors.popup_options).popup('open', {
+                        transition: 'pop',
+                        positionTo: that // neat, positions over the held element!
+                    });
+                    $(selectors.popup_options + ' .delete_chapter').click(function () {
+                        ui_state.book_ref.deleteChapter(index, function () {
+                            $(that).remove();
+                            $(selectors.page + ' ul').listview('refresh');
+                        })
+                        $(selectors.popup_options).popup('close');
+                    });
                 }).appendTo($list);
             });
             $list.listview('refresh');
+        });
+        $(document).on('pagecreate', selectors.page, function () {
+            $(selectors.popup_options).bind({
+                popupafterclose: function (event, ui) {
+                    $(selectors.popup_options + ' .delete_chapter').unbind('click');
+                }
+            });
         });
     };
 }
@@ -484,11 +515,9 @@ function BookPlayerPageGenerator(args) {
             URL.revokeObjectURL(ui_state.file_url);
             
             /* 
-             * For whatever reason, this is required, otherwise mp3s that have been loaded cannot be deleted.
-             * I don't really know why this is necessary, and why revoking the object url isn't enough, but
-             * it isn't.  Oh, Firefox OS...
-             * Also, if the app is crashed or forced closed, this event doesn't fire and the user can't delete
-             * the file until they restart their phone (?)
+             * Fix for filesystem issue.
+             * Issue only affects 2.0 simulator - 2.0 hardware and 2.2 simulator are unaffected.
+             * Should I leave this in?
              */
             $(args.selectors.audio).prop("src", '');
         });
@@ -513,12 +542,14 @@ var ui_state = {},
 
 storedBooksPageGenerator.registerEvents({
     list: '#stored-books-list',
-    page: '#storedBooks'
+    page: '#storedBooks',
+    popup_options: '#bookActionsMenu'
 });
 storedChaptersPageGenerator.registerEvents({
     header_title: '.chapter-title',
     list: '#stored-chapters-list',
-    page: '#storedChapters'
+    page: '#storedChapters',
+    popup_options: '#chapterActionsMenu'
 });
 bookPlayerPageGenerator.registerEvents({page: '#book-player'});
 
