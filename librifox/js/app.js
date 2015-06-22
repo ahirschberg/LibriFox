@@ -453,6 +453,7 @@ function BookPlayerPageGenerator(args) {
         page;
 
     this.generatePage = function (audio_url, chapter_name) {
+        alert('generated page with audio_url ' + audio_url + ' and chapter_name ' + chapter_name);
         $(args.selectors.audio).prop("src", audio_url);
         $(args.selectors.header).text(chapter_name);
     };
@@ -469,11 +470,13 @@ function BookPlayerPageGenerator(args) {
             var request = sdcard.get(ui_state.chapter_ref.path);
             request.onsuccess = function () {
                 var file = this.result;
+                console.log('loaded file from ' + file.name);
                 var file_url = ui_state.file_url = URL.createObjectURL(file);
                 bookPlayerPageGenerator.generatePage(file_url, ui_state.chapter_ref.name);
             };
             request.onerror = function () {
                 console.log('Error loading from ' + ui_state.chapter_ref.path, this.error);
+                alert('Error loading file ' + ui_state.chapter_ref.path + ': ' + this.error.name);
             };
         });
         $(document).on('pagebeforehide', selectors.page, function (event) {
@@ -642,7 +645,7 @@ function SearchResltsPageGenerator(args) {
                 $(results_selector).append(
                     '<p class="noAvailableBooks">' +
                     'No books found, try simplifying your search.<br/>' +
-                    'The LibriVox search API is not very good, so we' +
+                    'The LibriVox search API is not very good, so we ' +
                     'apologize for the inconvenience.</p>');
             }
         });
@@ -684,11 +687,11 @@ function HttpRequestHandler() {
             }
 
             other_args.error_callback = other_args.error_callback || function (e) {
-                console.log("error loading json from url " + url);
+                console.log("error loading " + type + " from url " + url);
                 console.log(e);
             }
             other_args.timeout_callback = other_args.timeout_callback || function (e) {
-                console.log("timeout loading json from url " + url);
+                console.log("timeout loading " + type + " from url " + url);
                 console.log(e);
             }
 
@@ -702,7 +705,7 @@ function HttpRequestHandler() {
             //  xhr.upload.addEventListener("load", transferComplete, false);
             //  xhr.upload.addEventListener("abort", transferCanceled, false);
             xhr.open('GET', url);
-            if (type != 'default') {
+            if (type != 'xml') {
                 xhr.responseType = type;
             }
             xhr.send();
@@ -712,7 +715,7 @@ function HttpRequestHandler() {
         that.getDataFromUrl(url, 'json', load_callback, other_args);
     };
     this.getXML = function (url, load_callback, other_args) {
-        that.getDataFromUrl(url, 'default', load_callback, other_args);
+        that.getDataFromUrl(url, 'xml', load_callback, other_args);
     };
     this.getBlob = function (url, load_callback, other_args) {
         that.getDataFromUrl(url, 'blob', load_callback, other_args);

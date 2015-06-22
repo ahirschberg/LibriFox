@@ -102,72 +102,74 @@ describe('BookReferenceManager()', function () {
             expect(ch0_ref).to.have.property('name', 'Introduction');
         });
     });
-    describe('#eachReference()', function () {
-        it('takes a function and passes it each book key in local_storage', function () {
-            store['abcdef'] = {
-                0: {
-                    path: 'bad'
+    describe('functions of returned book reference', function () {
+        describe('#eachReference()', function () {
+            it('takes a function and passes it each book key in local_storage', function () {
+                store['abcdef'] = {
+                    0: {
+                        path: 'bad'
+                    }
+                };
+                brm.storeJSONReference(BOOK_OBJECT, CHAPTER_OBJECT, 'this/is/path');
+
+                var result = [];
+                console.log(ls_proto.getItem('abcdef'));
+                brm.eachReference(function (obj) {
+                    result.push(obj[0].path);
+                });
+
+                expect(result.length).to.equal(2);
+                expect(result).to.contain('this/is/path');
+                expect(result).not.to.contain('bad');
+            });
+            it('objects have helper functions', function () {
+                brm.eachReference(function (obj) {
+                    expect(obj).property('eachChapter').to.be.a('function');
+                });
+            });
+        });
+        describe('#deleteChapter()', function () {
+            it('deletes the chapter with the given index and writes to local_storage', function () {
+                var mock_book = {
+                    id: 9999
+                };
+                var mock_chapter = {
+                    index: 1,
+                    name: 'Chapter 1'
                 }
-            };
-            brm.storeJSONReference(BOOK_OBJECT, CHAPTER_OBJECT, 'this/is/path');
+                var success_spy = sinon.spy();
+                brm.storeJSONReference(mock_book, mock_chapter, 'path2/to');
+                var book_ref = brm.loadJSONReference(9999);
+                book_ref.deleteChapter(0, success_spy);
 
-            var result = [];
-            console.log(ls_proto.getItem('abcdef'));
-            brm.eachReference(function (obj) {
-                result.push(obj[0].path);
-            });
+                expect(book_ref).not.to.have.property(0);
+                expect(book_ref).property('1').to.be.an('object');
 
-            expect(result.length).to.equal(2);
-            expect(result).to.contain('this/is/path');
-            expect(result).not.to.contain('bad');
-        });
-        it('objects have helper functions', function () {
-            brm.eachReference(function (obj) {
-                expect(obj).property('eachChapter').to.be.a('function');
+                expect(success_spy.callCount).to.equal(1);
+                expect(storageMgr_delete_spy.callCount).to.equal(1);
+
+                expect(brm.loadJSONReference(9999)).not.to.have.property(0);
+                expect(brm.loadJSONReference(9999)).property('1').to.be.an('object');
             });
         });
-    });
-    describe('#deleteChapter()', function () {
-        it('deletes the chapter with the given index and writes to local_storage', function () {
-            var mock_book = {
-                id: 9999
-            };
-            var mock_chapter = {
-                index: 1,
-                name: 'Chapter 1'
-            }
-            var success_spy = sinon.spy();
-            brm.storeJSONReference(mock_book, mock_chapter, 'path2/to');
-            var book_ref = brm.loadJSONReference(9999);
-            book_ref.deleteChapter(0, success_spy);
+        describe('#deleteBook()', function () { // filesystem error case is untested
+            it('deletes the book and writes to local_storage', function () {
+                var mock_book = {
+                    id: 9999
+                };
+                var mock_chapter = {
+                    index: 1,
+                    name: 'Chapter 1'
+                }
+                brm.storeJSONReference(mock_book, mock_chapter, 'path2/to');
 
-            expect(book_ref).not.to.have.property(0);
-            expect(book_ref).property('1').to.be.an('object');
-
-            expect(success_spy.callCount).to.equal(1);
-            expect(storageMgr_delete_spy.callCount).to.equal(1);
-
-            expect(brm.loadJSONReference(9999)).not.to.have.property(0);
-            expect(brm.loadJSONReference(9999)).property('1').to.be.an('object');
-        });
-    });
-    describe('#deleteBook()', function () { // filesystem error case is untested
-        it('deletes the book and writes to local_storage', function () {
-            var mock_book = {
-                id: 9999
-            };
-            var mock_chapter = {
-                index: 1,
-                name: 'Chapter 1'
-            }
-            brm.storeJSONReference(mock_book, mock_chapter, 'path2/to');
-
-            var success_spy = sinon.spy();
-            var book_ref = brm.loadJSONReference(9999);
-            book_ref.deleteBook(success_spy);
-            expect(success_spy.callCount).to.equal(1);
-            expect(brm.loadJSONReference(9999)).to.be.a('null');
-            expect(storageMgr_delete_spy.callCount).to.equal(2);
+                var success_spy = sinon.spy();
+                var book_ref = brm.loadJSONReference(9999);
+                book_ref.deleteBook(success_spy);
+                expect(success_spy.callCount).to.equal(1);
+                expect(brm.loadJSONReference(9999)).to.be.a('null');
+                expect(storageMgr_delete_spy.callCount).to.equal(2);
+            });
         });
     });
 });
