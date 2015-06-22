@@ -86,18 +86,18 @@ function ChaptersListPageGenerator(args) {
 
     function showLocalChapters(book) {
         var $dl_all = $('<li/>', {
-                html: $('<a/>', {
-                    text: 'Download all chapters (WIP)'
-                }),
-                click: function () {
-                    var that = this;
-                    $(that).unbind('click');
-                    book.chapters.forEach(function (chapter) {
-                        var chapter_list_element = $('[chapter-index="' + chapter.index + '"]');
-                        downloadChapterWithCbk(book, chapter, chapter_list_element);
-                    });
-                }
-            }).attr('data-icon', 'arrow-d');
+            html: $('<a/>', {
+                text: 'Download all chapters (WIP)'
+            }),
+            click: function () {
+                var that = this;
+                $(that).unbind('click');
+                book.chapters.forEach(function (chapter) {
+                    var chapter_list_element = $('[chapter-index="' + chapter.index + '"]');
+                    downloadChapterWithCbk(book, chapter, chapter_list_element);
+                });
+            }
+        }).attr('data-icon', 'arrow-d');
         $dl_all.append(PROGRESSBAR_HTML);
         
         $(list_selector).append($dl_all);
@@ -376,7 +376,8 @@ bookReferenceManager.registerStorageManager(bookStorageManager);
 function StoredBooksPageGenerator(args) {
     var that = this,
         referenceManager = args.bookReferenceManager,
-        ui_state = args.ui_state;
+        ui_state = args.ui_state,
+        fileManager = args.fileManager;
 
     this.registerEvents = function (selectors) {
         if (!selectors.page) {
@@ -387,18 +388,7 @@ function StoredBooksPageGenerator(args) {
             var $list = $(selectors.list);
             $list.children('li.stored-book').remove();
             referenceManager.eachReference(function (obj) {
-                var link = $('<a/>', {
-                    'class': 'showFullText',
-                    text: obj.title,
-                    href: 'stored_chapters.html',
-                    click: function () {
-                        ui_state.book_ref = obj
-                    }
-                });
-                $('<li/>', {
-                    'class': 'stored-book',
-                    html: link
-                }).bind('taphold', function () {
+                createListItem(obj).bind('taphold', function () {
                     var that = this;
                     $(selectors.popup_options).popup('open', {
                         transition: 'pop',
@@ -416,6 +406,20 @@ function StoredBooksPageGenerator(args) {
                     });
                 }).appendTo($list);
             });
+            fileManager.enumerateFiles({
+                match: /LibriFox Audiobooks\/([^\/]+)\/([^\/]+)\.mp3/,
+                func_each: function (result, match_arr) {
+                    var obj = {
+                        title: match_arr[1]
+                    };
+                    createListItem(obj)
+                        .addClass('filesystem_book')
+                        .appendTo($list);
+                },
+                func_done: function () {
+                    $list.listview('refresh');
+                }
+            });
             $list.listview('refresh');
         });
         $(document).on('pagecreate', selectors.page, function () {
@@ -426,6 +430,21 @@ function StoredBooksPageGenerator(args) {
             });
         });
     };
+    
+    function createListItem(book_obj) {
+        var link = $('<a/>', {
+            'class': 'showFullText',
+            text: book_obj.title,
+            href: 'stored_chapters.html',
+            click: function () {
+                ui_state.book_ref = book_obj
+            }
+        });
+        return $('<li/>', {
+            'class': 'stored-book',
+            html: link
+        });
+    }
 }
 
 function StoredChaptersPageGenerator(args) {
@@ -441,18 +460,7 @@ function StoredChaptersPageGenerator(args) {
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
             ui_state.book_ref.eachChapter(function (chapter_ref, index) {
-                var link = $('<a/>', {
-                    'class': 'showFullText',
-                    href: 'book.html',
-                    text: chapter_ref.name,
-                    click: function () {
-                        ui_state.chapter_ref = chapter_ref;
-                    }
-                });
-                $('<li/>', {
-                    'class': 'stored-chapter',
-                    html: link
-                }).bind('taphold', function () {
+                createListItem(chapter_ref).bind('taphold', function () {
                     var that = this;
                     $(selectors.popup_options).popup('open', {
                         transition: 'pop',
@@ -477,6 +485,21 @@ function StoredChaptersPageGenerator(args) {
             });
         });
     };
+    
+    function createListItem(chapter_ref) {
+        var link = $('<a/>', {
+            'class': 'showFullText',
+            href: 'book.html',
+            text: chapter_ref.name,
+            click: function () {
+                ui_state.chapter_ref = chapter_ref;
+            }
+        });
+        return $('<li/>', {
+            'class': 'stored-chapter',
+            html: link
+        });
+    }
 }
 
 function BookPlayerPageGenerator(args) {
@@ -525,8 +548,10 @@ function BookPlayerPageGenerator(args) {
 }
 
 var ui_state = {},
+    fileManager = new FileManager(lf_getDeviceStorage()),
     storedBooksPageGenerator = new StoredBooksPageGenerator({
         bookReferenceManager: bookReferenceManager,
+        fileManager: fileManager,
         ui_state: ui_state
     }),
     storedChaptersPageGenerator = new StoredChaptersPageGenerator({
@@ -553,8 +578,6 @@ storedChaptersPageGenerator.registerEvents({
 });
 bookPlayerPageGenerator.registerEvents({page: '#book-player'});
 
-
-var fileManager = new FileManager(lf_getDeviceStorage());
 $(document).on("pageshow", "#homeFileManager", function () {
     $('#deleteAll').click(function () {
         fileManager.deleteAllAppFiles();
@@ -590,7 +613,7 @@ function FileManager(storage_device) {
     }
 
     this.enumerateFiles = function (args) {
-        var match = args.match,
+        var match_rxp = args.match,
             func_each = args.func_each,
             func_done = args.func_done,
             func_error = args.func_error;
@@ -598,15 +621,15 @@ function FileManager(storage_device) {
         var request = storage_device.enumerate();
         request.onsuccess = function () {
             if (this.result) {
-                if (this.result.name.match(match)) {
+                var matched_name = this.result.name.match(match_rxp);
+                if (matched_name) {
                     console.log('calling func_each');
-
-                    func_each(this.result);
+                    func_each && func_each(this.result, matched_name);
                 }
                 this.continue();
             } else {
                 console.log('calling func_done');
-                func_done();
+                func_done && func_done();
             }
         };
         request.onerror = function () {

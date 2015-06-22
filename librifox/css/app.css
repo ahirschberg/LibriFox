@@ -40,3 +40,8 @@ p {
 .showFullText {
     white-space: normal !important;
 }
+
+li.filesystem_book {
+    font-style: italic;
+    border-bottom: 2px solid rgba(237, 135, 95, 0.48);
+}
