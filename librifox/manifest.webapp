@@ -10,7 +10,7 @@
         "128": "/img/icons/icon128x128.png"
     },
     "developer": {
-        "name": "Alex Hirschberg and Finn Cardiff",
+        "name": "Alex Hirschberg",
         "url": "http://arltechinnovation.us"
     },
     "type": "privileged",
@@ -24,9 +24,8 @@
         }
     },
     "installs_allowed_from": [
-    "*"
-  ],
-    "locales": {
-    },
+        "*"
+    ],
+    "locales": {},
     "default_locale": "en"
 }

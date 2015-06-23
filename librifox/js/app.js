@@ -201,17 +201,23 @@ function BookStorageManager(args) {
 
     this.writeChapter = function (blob, book_obj, chapter_obj) {
         var chPath = that.getChapterFilePath(book_obj.id, chapter_obj.index);
-        that.write(blob, chPath);
-        referenceManager.storeJSONReference(book_obj, chapter_obj, chPath);
+        that.write(blob, chPath, function (saved_path) {
+            referenceManager.storeJSONReference(book_obj, chapter_obj, saved_path);
+        });
     };
 
-    this.write = function (blob, path) {
+    this.write = function (blob, path, success_fn) {
         console.log('writing:', blob, path);
         var request = storageDevice.addNamed(blob, path);
         if (request) {
             request.onsuccess = function () {
                 console.log('wrote: ' + this.result);
+                success_fn && success_fn(this.result);
             };
+            request.onerror = function () {
+                console.warn('failed to write ' + path + ': ' + this.error.name);
+                alert('failed to write file: ' + this.error.name);
+            }
         }
     };
     
@@ -514,7 +520,6 @@ function BookPlayerPageGenerator(args) {
 
     this.registerEvents = function (selectors) {
         page = selectors.page;
-        console.log('test');
         $(document).on("pagecreate", selectors.page, function (event) {
             if (!ui_state.chapter_ref) {
                 console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
