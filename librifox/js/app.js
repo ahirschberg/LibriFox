@@ -215,7 +215,7 @@ function BookStorageManager(args) {
                 success_fn && success_fn(this.result);
             };
             request.onerror = function () {
-                console.warn('failed to write ' + path + ': ' + this.error.name);
+                console.warn('failed to write ' + path + ': ', this.error);
                 alert('failed to write file: ' + this.error.name);
             }
         }
@@ -234,7 +234,7 @@ function BookStorageManager(args) {
     };
 
     this.getChapterFilePath = function (book_id, chapter_index) {
-        return 'librifox/' + book_id + '/' + chapter_index + '.mp3';
+        return 'librifox/' + book_id + '/' + chapter_index + '.lfa';
     };
 }
 
@@ -272,9 +272,15 @@ function BookReferenceManager(args) {
         Object.keys(local_storage).forEach(function (key) {
             console.log(key);
             if (key.startsWith(JSON_PREFIX) && local_storage.hasOwnProperty(key)) {
-                var book_ref = JSON.parse(local_storage.getItem(key));
-                applyHelperFunctions(book_ref);
-                each_fn(book_ref);
+                var book_ref
+                try {
+                    book_ref = JSON.parse(local_storage.getItem(key));
+                    applyHelperFunctions(book_ref);
+                    each_fn(book_ref);
+                } catch (err) {
+                    console.warn('Failed to parse JSON for book ' + key);
+                    alert('Error: could not parse JSON data for book ' + key);
+                }
             }
         });
     };
@@ -359,6 +365,58 @@ function BookReferenceManager(args) {
         return /^\d+$/.test(index)
     }
 }
+function FilesystemBookReferenceManager(args) {
+    var storageDevice = args.storageDevice,
+        fileManager = args.fileManager,
+        books = this.books = (function () {
+            var books_store = {};
+            return {
+                untitled: [],
+                getBook: function (book_str) {
+                    return books_store[book_str];
+                },
+                setBook: function (book_str, obj) {
+                    books_store[book_str] = obj;
+                }
+            };
+        })();
+
+    this.findAllChapters = function () {
+        fileManager.enumerateFiles({
+            enumerate_path: 'LibriFox Audiobooks',
+            match: /.*\.lfa$/,
+            func_each: function (result, match_arr) {
+                console.log(result);
+                id3(result, function (err, tags) {
+                    console.log(tags);
+                    addBook(tags, result.name);
+                });
+            },
+            func_done: function () {}
+        });
+    };
+    function addBook(id3_tags, chapterPath) {
+        var track_num = parseInt(
+                ( id3_tags.v1.track ||
+                  id3_tags.v2.track.match(/(\d+)\/\d+/)[1] || // If the string is in format track#/total#
+                  id3_tags.v2.track),
+                10),
+            book_name = id3_tags.album,
+            chapter_name = id3_tags.title;
+        
+        var obj = books.getBook(book_name) || {},
+            chapters = obj.chapters || {};
+        chapters[track_num] = {
+            path: chapterPath,
+            name: chapter_name
+        };
+        obj.chapters = chapters;
+        console.log(obj);
+        if (book_name)
+        books.setBook(book_name, obj);
+    }
+}
+
 var bookReferenceManager = new BookReferenceManager({
         storageManager: bookStorageManager
     }),
@@ -376,14 +434,18 @@ var bookReferenceManager = new BookReferenceManager({
         'list_selector': '#chaptersList',
         'header_selector': '#chapterHeader',
         'bookDownloadManager': bookDownloadManager
+    }),
+    fileManager = new FileManager(lf_getDeviceStorage()),
+    fsBookReferenceManager = new FilesystemBookReferenceManager({
+        'fileManager': fileManager
     });
 bookReferenceManager.registerStorageManager(bookStorageManager);
+//fsBookReferenceManager.findAllChapters();
 
 function StoredBooksPageGenerator(args) {
     var that = this,
         referenceManager = args.bookReferenceManager,
-        ui_state = args.ui_state,
-        fileManager = args.fileManager;
+        ui_state = args.ui_state;
 
     this.registerEvents = function (selectors) {
         if (!selectors.page) {
@@ -411,20 +473,6 @@ function StoredBooksPageGenerator(args) {
                         $(selectors.popup_options).popup('close');
                     });
                 }).appendTo($list);
-            });
-            fileManager.enumerateFiles({
-                match: /LibriFox Audiobooks\/([^\/]+)\/([^\/]+)\.mp3/,
-                func_each: function (result, match_arr) {
-                    var obj = {
-                        title: match_arr[1]
-                    };
-                    createListItem(obj)
-                        .addClass('filesystem_book')
-                        .appendTo($list);
-                },
-                func_done: function () {
-                    $list.listview('refresh');
-                }
             });
             $list.listview('refresh');
         });
@@ -553,7 +601,6 @@ function BookPlayerPageGenerator(args) {
 }
 
 var ui_state = {},
-    fileManager = new FileManager(lf_getDeviceStorage()),
     storedBooksPageGenerator = new StoredBooksPageGenerator({
         bookReferenceManager: bookReferenceManager,
         fileManager: fileManager,
@@ -611,23 +658,24 @@ function FileManager(storage_device) {
 
         $("#downloadedFiles").empty();
         that.enumerateFiles({
-            match: /librifox\/.*/,
+            enumerate_path: 'librifox',
             func_each: enumeration_cb,
-            func_done: done_cb
+            func_done: done_cb,
         });
     }
 
     this.enumerateFiles = function (args) {
         var match_rxp = args.match,
+            enumerate_path = args.enumerate_path || undefined,
             func_each = args.func_each,
             func_done = args.func_done,
             func_error = args.func_error;
 
-        var request = storage_device.enumerate();
+        var request = storage_device.enumerate(enumerate_path);
         request.onsuccess = function () {
             if (this.result) {
                 var matched_name = this.result.name.match(match_rxp);
-                if (matched_name) {
+                if (matched_name || !match_rxp) {
                     console.log('calling func_each');
                     func_each && func_each(this.result, matched_name);
                 }
@@ -638,6 +686,7 @@ function FileManager(storage_device) {
             }
         };
         request.onerror = function () {
+            console.log(this, this.error);
             func_error && func_error();
         };
     };
