@@ -199,10 +199,11 @@ function BookStorageManager(args) {
         storageDevice = args.storageDevice,
         referenceManager = args.referenceManager;
 
-    this.writeChapter = function (blob, book_obj, chapter_obj) {
+    this.writeChapter = function (blob, book_obj, chapter_obj, func_done) {
         var chPath = that.getChapterFilePath(book_obj.id, chapter_obj.index);
         that.write(blob, chPath, function (saved_path) {
             referenceManager.storeJSONReference(book_obj, chapter_obj, saved_path);
+            func_done && func_done();
         });
     };
 
@@ -526,7 +527,9 @@ var bookReferenceManager = new BookReferenceManager({
         'fileManager': fileManager
     });
 bookReferenceManager.registerStorageManager(bookStorageManager);
-fsBookReferenceManager.findAllChapters();
+if (lf_getDeviceStorage()) {
+    fsBookReferenceManager.findAllChapters();
+}
 
 function StoredBooksPageGenerator(args) {
     var that = this,
@@ -877,41 +880,40 @@ searchResultsPageGenerator.registerEvents({
 function HttpRequestHandler() {
     var that = this;
 
-    this.getDataFromUrl = function (url, type, load_callback, other_args) // NEEDS MORE MAGIC STRINGS
-        {
-            other_args = other_args || {};
-            var xhr = new XMLHttpRequest({
-                mozSystem: true
-            });
+    this.getDataFromUrl = function (url, type, load_callback, other_args) { // NEEDS MORE MAGIC STRINGS
+        other_args = other_args || {};
+        var xhr = new XMLHttpRequest({
+            mozSystem: true
+        });
 
-            if (xhr.overrideMimeType && type == 'json') {
-                xhr.overrideMimeType('application/json');
-            }
-
-            other_args.error_callback = other_args.error_callback || function (e) {
-                console.log("error loading " + type + " from url " + url);
-                console.log(e);
-            }
-            other_args.timeout_callback = other_args.timeout_callback || function (e) {
-                console.log("timeout loading " + type + " from url " + url);
-                console.log(e);
-            }
-
-            xhr.addEventListener('load', function (e) {
-                load_callback(xhr, e);
-            });
-
-            xhr.addEventListener('error', other_args.error_callback);
-            xhr.addEventListener('timeout', other_args.timeout_callback);
-            xhr.addEventListener('progress', other_args.progress_callback);
-            //  xhr.upload.addEventListener("load", transferComplete, false);
-            //  xhr.upload.addEventListener("abort", transferCanceled, false);
-            xhr.open('GET', url);
-            if (type != 'xml') {
-                xhr.responseType = type;
-            }
-            xhr.send();
+        if (xhr.overrideMimeType && type == 'json') {
+            xhr.overrideMimeType('application/json');
         }
+
+        other_args.error_callback = other_args.error_callback || function (e) {
+            console.log("error loading " + type + " from url " + url);
+            console.log(e);
+        }
+        other_args.timeout_callback = other_args.timeout_callback || function (e) {
+            console.log("timeout loading " + type + " from url " + url);
+            console.log(e);
+        }
+
+        xhr.addEventListener('load', function (e) {
+            load_callback(xhr, e);
+        });
+
+        xhr.addEventListener('error', other_args.error_callback);
+        xhr.addEventListener('timeout', other_args.timeout_callback);
+        xhr.addEventListener('progress', other_args.progress_callback);
+        //  xhr.upload.addEventListener("load", transferComplete, false);
+        //  xhr.upload.addEventListener("abort", transferCanceled, false);
+        xhr.open('GET', url);
+        if (type != 'xml') {
+            xhr.responseType = type;
+        }
+        xhr.send();
+    }
 
     this.getJSON = function (url, load_callback, other_args) {
         that.getDataFromUrl(url, 'json', load_callback, other_args);
