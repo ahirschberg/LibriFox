@@ -814,6 +814,7 @@ function FileManager(storage_device) {
 function SearchResltsPageGenerator(args) {
     var httpRequestHandler = args.httpRequestHandler,
         results_selector = args.results_selector,
+        field,
         that = this;
     if (!results_selector) {
         console.warn('results_selector is undefined');
@@ -826,6 +827,15 @@ function SearchResltsPageGenerator(args) {
                 var input = $(selectors.search).val();
                 that.displayResults(input);
                 return false;
+            });
+            console.log($(selectors.settings_popup + ' .search-by-title'));
+            $(selectors.settings_popup + ' .search-by-title').click(function () {
+                field = 'title';
+                $(selectors.settings_popup).popup('close');
+            });
+            $(selectors.settings_popup + ' .search-by-lname').click(function () {
+                field = 'author';
+                $(selectors.settings_popup).popup('close');
             });
         });
     }
@@ -849,7 +859,7 @@ function SearchResltsPageGenerator(args) {
             } else {
                 $(results_selector).append(
                     '<p class="noAvailableBooks">' +
-                    'No books found, try simplifying your search.<br/>' +
+                    'No books found when searching for ' + field + ', try simplifying your search.<br/>' +
                     'The LibriVox search API is not very good, so we ' +
                     'apologize for the inconvenience.</p>');
             }
@@ -857,24 +867,37 @@ function SearchResltsPageGenerator(args) {
     }
 
     function getSearchJSON(search_string, callback_func) {
-        httpRequestHandler.getJSON(generateBookUrl(search_string), function (xhr) {
+        httpRequestHandler.getJSON(generateBookUrl(search_string, field), function (xhr) {
             callback_func(xhr.response.books);
         });
     }
 
-    function generateBookUrl(search_string) { // this should be private, but I want to test it :(
-        return "https://librivox.org/api/feed/audiobooks/title/^" + encodeURIComponent(search_string) + "?&format=json";
+    function generateBookUrl(search_string, field) {
+        var sanitized_field = field;
+        switch(field) { // field is self-contained/private, do I need to test it?
+            case 'title':
+            case 'author':
+            case undefined:
+                sanitized_field = field;
+                break;
+            default:
+                console.warn('field ' + field + ' is not valid');
+        }
+        sanitized_field = sanitized_field || 'title';
+        
+        return "https://librivox.org/api/feed/audiobooks/" + sanitized_field + "/^" + encodeURIComponent(search_string) + "?&format=json";
     }
 }
 var searchResultsPageGenerator =
     new SearchResltsPageGenerator({
-        'httpRequestHandler': httpRequestHandler,
-        'results_selector': '#results-listing'
+        httpRequestHandler: httpRequestHandler,
+        results_selector: '#results-listing'
     });
 searchResultsPageGenerator.registerEvents({
     page: "#bookSearch",
     form: "#search-form",
-    search: "#books-search-bar"
+    search: "#books-search-bar",
+    settings_popup: '#search-settings'
 });
 
 function HttpRequestHandler() {

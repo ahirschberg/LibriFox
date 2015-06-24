@@ -43,7 +43,6 @@ describe('BookStorageManager()', function () {
                 CHAPTER_OBJECT,
                 'librifox/1234/0.lfa'
             )).to.be.true;
-
         });
     });
     describe('#write()', function () {

@@ -26,16 +26,31 @@
 
 <body>
     <div data-role="page" id="bookSearch" data-dom-cache="true">
-        
+
         <header data-role="header">
             <h1>Search</h1>
             <!-- TODO fix overflow cutoff? -->
             <a data-rel="back" data-icon="back" data-iconpos="notext"></a>
+            <a data-icon="gear" data-iconpos="notext" href="#search-settings" data-rel="popup"></a>
         </header>
         <form id="search-form">
             <input type="search" placeholder="Enter a written work" name="search-mini" id="books-search-bar" data-mini="true" />
         </form>
         <ul data-role="listview" id="results-listing"></ul>
+        <div id="search-settings" data-role="popup">
+            <ul data-role="listview" data-inset="true" style="min-width:210px;">
+                <li data-role="list-divider">Search by</li>
+                <li><a href="#" class="search-by-title">Title
+                    <p>Full title or beginning of title</p>
+                    </a>
+                </li>
+                <li><a href="#" class="search-by-lname">
+                    Author
+                    <p>Must be exact last name</p>
+                    </a>
+                </li>
+            </ul>
+        </div>
     </div>
 </body>
 
