@@ -43,5 +43,11 @@ p {
 
 li.filesystem_book {
     font-style: italic;
-    border-bottom: 2px solid rgba(237, 135, 95, 0.48);
+    border-width: 2px 0 0 0;
+    border-color: rgba(237, 135, 95, 0.48);
+    border-style: solid; 
+    border-collapse: collapse;
+}
+li.filesystem_book:last-child {
+    border-width: 2px 0;
 }

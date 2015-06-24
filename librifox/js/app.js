@@ -343,7 +343,6 @@ function BookReferenceManager(args) {
                     }
                 };
 
-
             this_book_ref.eachChapter(function (chapter, index) {
                 storageManager.delete(
                     chapter.path,
@@ -365,9 +364,15 @@ function BookReferenceManager(args) {
         return /^\d+$/.test(index)
     }
 }
+
 function FilesystemBookReferenceManager(args) {
+    'use strict';
+    
     var storageDevice = args.storageDevice,
         fileManager = args.fileManager,
+        each_book_callback,
+        done_all_callback,
+        done_enumerating,
         books = this.books = (function () {
             var books_store = {};
             return {
@@ -377,43 +382,124 @@ function FilesystemBookReferenceManager(args) {
                 },
                 setBook: function (book_str, obj) {
                     books_store[book_str] = obj;
-                }
+                },
+                eachReference: function(func_each) {
+                    Object.keys(books_store).forEach(function (key) {
+                        console.log(key);
+                        func_each(books_store[key], key);
+                    });
+                    this.untitled.forEach(function () {
+                        func_each.apply(this, arguments);
+                    });
+                },
+                store: books_store // temp
             };
         })();
 
     this.findAllChapters = function () {
+        done_enumerating = false;
         fileManager.enumerateFiles({
             enumerate_path: 'LibriFox Audiobooks',
-            match: /.*\.lfa$/,
+            match: /.*\.(?:mp3$|lfa)/, // match all files with .mp3 or .lfa extension
             func_each: function (result, match_arr) {
-                console.log(result);
                 id3(result, function (err, tags) {
-                    console.log(tags);
-                    addBook(tags, result.name);
+                    var book_result = addBook(tags, result.name);
+                    if (book_result.isNew) {
+                        if (each_book_callback) {
+                            each_book_callback(book_result.book);
+                        }
+                    }
                 });
-            },
-            func_done: function () {}
+            }
         });
     };
-    function addBook(id3_tags, chapterPath) {
-        var track_num = parseInt(
-                ( id3_tags.v1.track ||
-                  id3_tags.v2.track.match(/(\d+)\/\d+/)[1] || // If the string is in format track#/total#
-                  id3_tags.v2.track),
-                10),
-            book_name = id3_tags.album,
-            chapter_name = id3_tags.title;
+    
+    this.setCallback = function (each_book) {
+        books.eachReference(function (book) { // in case books are parsed before callback is set
+            each_book(book);
+        });
         
-        var obj = books.getBook(book_name) || {},
-            chapters = obj.chapters || {};
-        chapters[track_num] = {
-            path: chapterPath,
-            name: chapter_name
-        };
+        each_book_callback = each_book;
+    };
+    
+    this.eachReference = function (func_each) {
+        console.log('eachReference called', books.store);
+        books.eachReference(func_each);
+    };
+    
+    function addBook(id3_tags, chapterPath) {
+        var track_num = parseInt(stripNullCharacter( // dear lord clean this up
+                ( id3_tags.v1.track ||
+                  (id3_tags.v2.track && id3_tags.v2.track.match(/(\d+)\/\d+/)[1]) || // If the string is in format track#/total#, parse out track#
+                  id3_tags.v2.track ) ),
+                10),
+            book_name = stripNullCharacter(id3_tags.album),
+            chapter_name = stripNullCharacter(id3_tags.title),
+            obj = books.getBook(book_name),
+            isNew = false;
+
+        if (!obj) {
+            obj = {};
+            isNew = true;
+        }
+        
+        var chapters = obj.chapters || {},
+            ch_obj = {
+                path: chapterPath,
+                name: chapter_name || getNameFromPath(chapterPath)
+            };
+        
+        var unindexed = chapters.unindexed || [];
+        if (track_num) {
+            chapters[track_num] = ch_obj;
+        } else {
+            unindexed.push(ch_obj);
+        }
+        chapters.unindexed = unindexed;
+
         obj.chapters = chapters;
-        console.log(obj);
-        if (book_name)
-        books.setBook(book_name, obj);
+        obj.title = book_name;
+        applyHelperFunctions(obj);
+        
+        if (book_name) {
+            books.setBook(book_name, obj);
+        } else {
+            console.warn('Could not get book name for file at ' + chapterPath);
+            obj.title = 'Untitled Book';
+            books.untitled.push(obj);
+        }
+        
+        return {book: obj, isNew: isNew};
+    }
+    
+    function applyHelperFunctions (book_ref) {
+        book_ref.eachChapter = function (each_fn) { // function duplicated from BookReferenceManager! needs fix!
+            Object.keys(book_ref.chapters).forEach(function (key) {
+                if (isValidIndex(key) && book_ref.chapters.hasOwnProperty(key)) {
+                    each_fn(book_ref.chapters[key], parseInt(key, 10));
+                }
+            });
+            book_ref.chapters.unindexed.forEach(function(chapter) {
+                each_fn(chapter);
+            });
+        };
+        
+        return book_ref;
+    }
+    
+    function stripNullCharacter(str) {
+        if (str && str.replace) {
+            return str.replace(/\u0000/g, ''); // some of the ID3 tags have null character, strip those out
+        } else {
+            return str;
+        }
+    }
+    function getNameFromPath(path_str) {
+        var match = path_str.match(/.*\/(.*)$/);
+        return match && match[1];
+    }
+    function isValidIndex(index) { // also duplicated! needs fix!
+        return /^\d+$/.test(index)
     }
 }
 
@@ -440,11 +526,12 @@ var bookReferenceManager = new BookReferenceManager({
         'fileManager': fileManager
     });
 bookReferenceManager.registerStorageManager(bookStorageManager);
-//fsBookReferenceManager.findAllChapters();
+fsBookReferenceManager.findAllChapters();
 
 function StoredBooksPageGenerator(args) {
     var that = this,
         referenceManager = args.bookReferenceManager,
+        fsReferenceManager = args.fsBookReferenceManager,
         ui_state = args.ui_state;
 
     this.registerEvents = function (selectors) {
@@ -475,6 +562,12 @@ function StoredBooksPageGenerator(args) {
                 }).appendTo($list);
             });
             $list.listview('refresh');
+            fsReferenceManager.setCallback(function (book_ref) {
+                createListItem(book_ref)
+                    .addClass('filesystem_book')
+                    .appendTo($list);
+                $list.listview('refresh');
+            });
         });
         $(document).on('pagecreate', selectors.page, function () {
             $(selectors.popup_options).bind({
@@ -561,7 +654,7 @@ function BookPlayerPageGenerator(args) {
         page;
 
     this.generatePage = function (audio_url, chapter_name) {
-        alert('generated page with audio_url ' + audio_url + ' and chapter_name ' + chapter_name);
+        //alert('generated page with audio_url ' + audio_url + ' and chapter_name ' + chapter_name);
         $(args.selectors.audio).prop("src", audio_url);
         $(args.selectors.header).text(chapter_name);
     };
@@ -604,6 +697,7 @@ var ui_state = {},
     storedBooksPageGenerator = new StoredBooksPageGenerator({
         bookReferenceManager: bookReferenceManager,
         fileManager: fileManager,
+        fsBookReferenceManager: fsBookReferenceManager,
         ui_state: ui_state
     }),
     storedChaptersPageGenerator = new StoredChaptersPageGenerator({
@@ -686,7 +780,7 @@ function FileManager(storage_device) {
             }
         };
         request.onerror = function () {
-            console.log(this, this.error);
+            console.log(this.error);
             func_error && func_error();
         };
     };
