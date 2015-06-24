@@ -242,9 +242,12 @@ function BookStorageManager(args) {
 function BookReferenceManager(args) {
     var args = args || {},
         local_storage = args.localStorage || localStorage,
+        obj_storage = {},
         that = this,
         storageManager = args.storageManager,
         JSON_PREFIX = this.JSON_PREFIX = 'bookid_';
+    
+    this.obj_storage = obj_storage; // for testing
 
     this.storeJSONReference = function (book_obj, chapter_obj, path) {
         if (!isValidIndex(book_obj.id)) {
@@ -262,26 +265,35 @@ function BookReferenceManager(args) {
             name: chapter_obj.name
         };
         local_storage.setItem(JSON_PREFIX + book_obj.id, JSON.stringify(obj));
+        applyHelperFunctions(obj);
+        obj_storage[JSON_PREFIX + book_obj.id] = obj;
     };
 
-    this.loadJSONReference = function (book_id) {
-        var book_ref = JSON.parse(local_storage.getItem(JSON_PREFIX + book_id));
-        return book_ref && applyHelperFunctions(book_ref);
+    this.loadJSONReference = function (book_id, prefix) {
+        if (!prefix && prefix !== '') { // allow null prefix, but default to JSON_PREFIX. this is bad behavior :(
+            prefix = JSON_PREFIX;
+        }
+        var os_book_ref = obj_storage[prefix + book_id];
+        if (os_book_ref) {
+            return os_book_ref;
+        } else {
+            try {
+                var ls_book_ref = JSON.parse(local_storage.getItem(prefix + book_id));
+                applyHelperFunctions(ls_book_ref);
+                obj_storage[prefix + book_id] = ls_book_ref;
+                return ls_book_ref;
+            } catch (err) {
+                console.warn('Failed to parse JSON for book ' + key);
+                alert('Error: could not parse JSON data for book ' + key);
+            }
+        }
     };
 
     this.eachReference = function (each_fn) {
         Object.keys(local_storage).forEach(function (key) {
-            console.log(key);
             if (key.startsWith(JSON_PREFIX) && local_storage.hasOwnProperty(key)) {
-                var book_ref
-                try {
-                    book_ref = JSON.parse(local_storage.getItem(key));
-                    applyHelperFunctions(book_ref);
-                    each_fn(book_ref);
-                } catch (err) {
-                    console.warn('Failed to parse JSON for book ' + key);
-                    alert('Error: could not parse JSON data for book ' + key);
-                }
+                var book_ref = that.loadJSONReference(key, '');
+                each_fn(book_ref);
             }
         });
     };
@@ -291,6 +303,9 @@ function BookReferenceManager(args) {
     };
 
     function applyHelperFunctions(book_ref) {
+        if (!book_ref) {
+            return undefined;
+        }
         book_ref.eachChapter = function (each_fn) {
             Object.keys(book_ref).forEach(function (key) {
                 if (isValidIndex(key) && book_ref.hasOwnProperty(key)) {
@@ -298,65 +313,85 @@ function BookReferenceManager(args) {
                 }
             });
         };
-        
+        book_ref.numChapters = function () {
+            var length = 0;
+            this.eachChapter(function () {
+                length += 1;
+            });
+            return length;
+        }
+
+        var remove_book_from_references = function (id) {
+            console.log('Completely removing book with id ' + id);
+            local_storage.removeItem(JSON_PREFIX + id);
+            delete obj_storage[JSON_PREFIX + id];
+
+        };
         book_ref.deleteChapter = function (index, success_fn) {
             var this_book_ref = this;
-            storageManager.delete(this_book_ref[index].path,
+            storageManager.delete(
+                this_book_ref[index].path,
                 function () {
                     delete this_book_ref[index];
                     var key = JSON_PREFIX + this_book_ref.id;
+                    if (this_book_ref.numChapters() === 0) {
+                        remove_book_from_references(this_book_ref.id);
+                    } else {
+                    obj_storage[key] = this_book_ref;
                     local_storage.setItem(key, JSON.stringify(this_book_ref));
-                    success_fn();
+                    success_fn && success_fn();
+                    }
                 },
                 function (err) {
                     alert('Error deleting chapter with index ' + index + '. ' + err.name)
                 });
         };
-        
-                    
+
+
         // TURN BACK, ALL YE WHO ENTER HERE
         book_ref.deleteBook = function (success_fn, error_fn) {
             var this_book_ref = this,
                 errors = false,
-                num_chapters = 0;
-            this_book_ref.eachChapter(function (chapter, index) { // get the number of chapters that will be iterated over
-                num_chapters += 1;
-            });
-            
+                num_chapters = this_book_ref.numChapters();
+
             // oh my this is horrible, forced to do this because of FXOS filesystem
             // error possibility on the 2.0 browser (seems fixed on 2.2)
             var chapters_attempted_removal = 0,
-                finalize_deletions_if_ready = function (index) {
+                finalize_deletions_if_ready = function () {
                     chapters_attempted_removal += 1;
                     if (chapters_attempted_removal >= num_chapters) {
                         if (!errors) {
                             // only remove JSON once all chapters have been successfully removed
-                            console.log('Completely removing book with id ' + this_book_ref.id);
-                            local_storage.removeItem(JSON_PREFIX + this_book_ref.id);
-
+                            remove_book_from_references(this_book_ref.id);
+                            
                             success_fn && success_fn();
                         } else {
                             console.warn('Unable to fully remove book "' + this_book_ref.title + '". Errors were encountered when attempting to delete files.');
+                            obj_storage[JSON_PREFIX + this_book_ref.id] = undefined;
                             local_storage.setItem(JSON_PREFIX + this_book_ref.id, JSON.stringify(this_book_ref));
 
                             error_fn && error_fn();
                         }
                     }
                 };
-
-            this_book_ref.eachChapter(function (chapter, index) {
-                storageManager.delete(
-                    chapter.path,
-                    function () {
-                        delete this_book_ref[index];
-                        finalize_deletions_if_ready(index);
-                    },
-                    function (err) {
-                        console.error('Error deleting chapter with index ' + index + '. ' + err.name);
-                        errors = true;
-                        finalize_deletions_if_ready(index);
-                    });
-            });
+            if (num_chapters > 0) {
+                this_book_ref.eachChapter(function (chapter, index) {
+                    storageManager.delete(
+                        chapter.path,
+                        function () {
+                            delete this_book_ref[index];
+                            finalize_deletions_if_ready();
+                        },
+                        function (err) {
+                            console.error('Error deleting chapter with index ' + index + '. ' + err.name);
+                            errors = true;
+                            finalize_deletions_if_ready();
+                        }
+                    );
+                });
+            } else {
+                finalize_deletions_if_ready();
+            }
         };
         return book_ref;
     }
@@ -364,6 +399,26 @@ function BookReferenceManager(args) {
     function isValidIndex(index) {
         return /^\d+$/.test(index)
     }
+}
+
+function BookReferenceValidator(args) {
+    'use strict';
+    
+    var fileManager = args.fileManager,
+        referenceManager = args.referenceManager;
+    
+    this.validateMetadata = function () {
+        referenceManager.eachReference(function (book_ref) {
+            book_ref.eachChapter(function (chapter, index) {
+                fileManager.testForFile(chapter.path, function (exist) {
+                    if (!exist) {
+                        console.log('Could not find file at ' + chapter.path + ' removing reference in JSON');
+                        book_ref.deleteChapter(index);
+                    }
+                });
+            });
+        });
+    };
 }
 
 function FilesystemBookReferenceManager(args) {
@@ -386,7 +441,6 @@ function FilesystemBookReferenceManager(args) {
                 },
                 eachReference: function(func_each) {
                     Object.keys(books_store).forEach(function (key) {
-                        console.log(key);
                         func_each(books_store[key], key);
                     });
                     this.untitled.forEach(function () {
@@ -401,7 +455,7 @@ function FilesystemBookReferenceManager(args) {
         done_enumerating = false;
         fileManager.enumerateFiles({
             enumerate_path: 'LibriFox Audiobooks',
-            match: /.*\.(?:mp3$|lfa)/, // match all files with .mp3 or .lfa extension
+            match: /.*\.lfa/, // match all files with .mp3 or .lfa extension
             func_each: function (result, match_arr) {
                 id3(result, function (err, tags) {
                     var book_result = addBook(tags, result.name);
@@ -524,10 +578,15 @@ var bookReferenceManager = new BookReferenceManager({
     }),
     fileManager = new FileManager(lf_getDeviceStorage()),
     fsBookReferenceManager = new FilesystemBookReferenceManager({
-        'fileManager': fileManager
-    });
+        fileManager: fileManager
+    }),
+    bookReferenceValidator = new BookReferenceValidator({
+        referenceManager: bookReferenceManager,
+        fileManager: fileManager
+    }); 
 bookReferenceManager.registerStorageManager(bookStorageManager);
 if (lf_getDeviceStorage()) {
+    bookReferenceValidator.validateMetadata();
     fsBookReferenceManager.findAllChapters();
 }
 
@@ -535,42 +594,17 @@ function StoredBooksPageGenerator(args) {
     var that = this,
         referenceManager = args.bookReferenceManager,
         fsReferenceManager = args.fsBookReferenceManager,
+        selectors,
         ui_state = args.ui_state;
 
-    this.registerEvents = function (selectors) {
+    this.registerEvents = function (_selectors) {
+        selectors = _selectors;
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
         $(document).on('pageshow', selectors.page, function () {
             console.log('pageshow called for ' + selectors.page);
-            var $list = $(selectors.list);
-            $list.children('li.stored-book').remove();
-            referenceManager.eachReference(function (obj) {
-                createListItem(obj).bind('taphold', function () {
-                    var that = this;
-                    $(selectors.popup_options).popup('open', {
-                        transition: 'pop',
-                        positionTo: that // neat, positions over the held element!
-                    });
-                    $(selectors.popup_options + ' .delete_book').click(function () {
-                        obj.deleteBook(function () {
-                            $(that).remove();
-                            $list.listview('refresh');
-                        },
-                        function () {
-                            alert('Not all the chapters could be deleted, likely a Firefox OS filesystem issue. Retry after restarting your device.');
-                        });
-                        $(selectors.popup_options).popup('close');
-                    });
-                }).appendTo($list);
-            });
-            $list.listview('refresh');
-            fsReferenceManager.setCallback(function (book_ref) {
-                createListItem(book_ref)
-                    .addClass('filesystem_book')
-                    .appendTo($list);
-                $list.listview('refresh');
-            });
+            that.refreshList();
         });
         $(document).on('pagecreate', selectors.page, function () {
             $(selectors.popup_options).bind({
@@ -578,6 +612,40 @@ function StoredBooksPageGenerator(args) {
                     $(selectors.popup_options + ' .delete_book').unbind('click');
                 }
             });
+        });
+    };
+    
+    this.refreshList = function () {
+        if (!selectors) {
+            console.warn('StoredBookPageGenerator: refreshList probably won\'t do anything: selectors is undefined');
+        }
+        var $list = $(selectors.list);
+        $list.children('li.stored-book').remove();
+        referenceManager.eachReference(function (obj) {
+            createListItem(obj).bind('taphold', function () {
+                var that = this;
+                $(selectors.popup_options).popup('open', {
+                    transition: 'pop',
+                    positionTo: that // neat, positions over the held element!
+                });
+                $(selectors.popup_options + ' .delete_book').click(function () {
+                    obj.deleteBook(function () {
+                            $(that).remove();
+                            $list.listview('refresh');
+                        },
+                        function () {
+                            alert('Not all the chapters could be deleted, likely a Firefox OS filesystem issue. Retry after restarting your device.');
+                        });
+                    $(selectors.popup_options).popup('close');
+                });
+            }).appendTo($list);
+        });
+        $list.listview('refresh');
+        fsReferenceManager.setCallback(function (book_ref) {
+            createListItem(book_ref)
+                .addClass('filesystem_book')
+                .appendTo($list);
+            $list.listview('refresh');
         });
     };
     
@@ -609,6 +677,7 @@ function StoredChaptersPageGenerator(args) {
             $(selectors.header_title).text(ui_state.book_ref.title);
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
+            console.log(ui_state.book_ref);
             ui_state.book_ref.eachChapter(function (chapter_ref, index) {
                 createListItem(chapter_ref).bind('taphold', function () {
                     var that = this;
@@ -787,6 +856,17 @@ function FileManager(storage_device) {
             func_error && func_error();
         };
     };
+    
+    this.testForFile = function (path, result_callback) {
+        var request = storage_device.get(path);
+        request.onsuccess = function () {
+            result_callback(true, this);
+        };
+        request.onerror = function () {
+            result_callback(false, this);
+        }
+        
+    };
 
     this.deleteAllAppFiles = function () {
         var enumeration_cb = function (result) {
@@ -828,13 +908,14 @@ function SearchResltsPageGenerator(args) {
                 that.displayResults(input);
                 return false;
             });
-            console.log($(selectors.settings_popup + ' .search-by-title'));
             $(selectors.settings_popup + ' .search-by-title').click(function () {
                 field = 'title';
+                $(selectors.form + ' input').attr('placeholder', 'Enter a written work');
                 $(selectors.settings_popup).popup('close');
             });
             $(selectors.settings_popup + ' .search-by-lname').click(function () {
                 field = 'author';
+                $(selectors.form + ' input').attr('placeholder', 'Enter an author\'s last name');
                 $(selectors.settings_popup).popup('close');
             });
         });

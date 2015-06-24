@@ -54,6 +54,10 @@ describe('BookReferenceManager()', function () {
             var book_ref = brm.loadJSONReference(9999);
             expect(book_ref).property('eachChapter').to.be.a('function');
         });
+        it('adds reference to obj_storage', function () {
+            var book_ref = brm.loadJSONReference(9999);
+            expect(brm.obj_storage).to.have.property('bookid_9999');
+        });
     });
     describe('#storeJSONReference', function () {
         it('writes to localstorage', function () {
@@ -150,6 +154,11 @@ describe('BookReferenceManager()', function () {
 
                 expect(brm.loadJSONReference(9999)).not.to.have.property(0);
                 expect(brm.loadJSONReference(9999)).property('1').to.be.an('object');
+            });
+            it('also deletes the book if it is the only chapter', function () {
+                var book_ref = brm.loadJSONReference(9999);
+                book_ref.deleteChapter(0);
+                expect(brm.loadJSONReference(9999)).to.be.a('null');
             });
         });
         describe('#deleteBook()', function () { // filesystem error case is untested
