@@ -458,8 +458,7 @@ function BookReferenceValidator(args) {
 function FilesystemBookReferenceManager(args) {
     'use strict';
     
-    var storageDevice = args.storageDevice,
-        fileManager = args.fileManager,
+    var fileManager = args.fileManager,
         each_book_callback,
         done_all_callback,
         done_enumerating,
@@ -485,12 +484,12 @@ function FilesystemBookReferenceManager(args) {
             };
         })();
 
-    this.findAllChapters = function () {
+    this.findAllChapters = function (passed_in_func_each) {
         done_enumerating = false;
         fileManager.enumerateFiles({
             enumerate_path: 'LibriFox Audiobooks',
             match: /.*\.lfa/,
-            func_each: function (result, match_arr) {
+            func_each: function (result) {
                 id3(result, function (err, tags) {
                     var book_result = addBook(tags, result.name);
                     if (book_result.isNew) {
@@ -498,6 +497,7 @@ function FilesystemBookReferenceManager(args) {
                             each_book_callback(book_result.book);
                         }
                     }
+                    passed_in_func_each && passed_in_func_each();
                 });
             }
         });
@@ -512,16 +512,15 @@ function FilesystemBookReferenceManager(args) {
     };
     
     this.eachReference = function (func_each) {
-        console.log('eachReference called', books.store);
         books.eachReference(func_each);
     };
     
     function addBook(id3_tags, chapterPath) {
         var track_num = parseInt(stripNullCharacter( // dear lord clean this up
-                ( id3_tags.v1.track ||
-                  (id3_tags.v2.track && id3_tags.v2.track.match(/(\d+)\/\d+/)[1]) || // If the string is in format track#/total#, parse out track#
-                  id3_tags.v2.track ) ),
-                10),
+            ( id3_tags.v1.track ||
+              (id3_tags.v2.track && id3_tags.v2.track.match(/(\d+)\/\d+/)[1]) || // If the string is in format track#/total#, parse out track#
+              id3_tags.v2.track ) ),
+            10),
             book_name = stripNullCharacter(id3_tags.album),
             chapter_name = stripNullCharacter(id3_tags.title),
             obj = books.getBook(book_name),
