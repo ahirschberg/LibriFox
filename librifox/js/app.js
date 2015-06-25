@@ -298,6 +298,14 @@ function BookReferenceManager(args) {
         });
     };
     
+    this.everyChapter = function (each_ch_fn) {
+        that.eachReference(function (book_ref) {
+            book_ref.eachChapter(function (chapter, index) {
+                each_ch_fn(chapter, book_ref, index);
+            });
+        });
+    }
+    
     this.registerStorageManager = function (_storageManager) {
         storageManager = _storageManager;
     };
@@ -409,47 +417,31 @@ function BookReferenceValidator(args) {
         referenceManager = args.referenceManager;
     
     this.validateMetadata = function (done_func) {
-        var num_references = 0,
-            num_references_checked = 0,
-            old_book_ref = undefined,
+        var num_chapters = 0,
+            num_chapters_checked = 0,
             invalid_paths = [];
         if (done_func) { // don't bother checking length if it won't matter
-            referenceManager.eachReference(function () {
-                num_references += 1
+            referenceManager.everyChapter(function () {
+                num_chapters += 1
             });
         }
-        
-        referenceManager.eachReference(function (book_ref) {
-            var num_chapters = 0,
-                num_chapters_checked = 0;
-            if (done_func) { 
-                num_chapters = book_ref.numChapters()
-            }
-            book_ref.eachChapter(function (chapter, index) {
-                fileManager.testForFile(chapter.path, function (exist) {
-                    // increment num_references_checked within deepest callback
-                    // because otherwise it will always == num_references
-                    // ASK is there a better way to deal with callbacks?
-                    if (book_ref !== old_book_ref) { 
-                        num_references_checked += 1;
-                        old_book_ref = book_ref;
+        referenceManager.everyChapter(function (chapter, ch_book_ref, index) {
+            fileManager.testForFile(chapter.path, function (exist) {
+                num_chapters_checked += 1;
+                var deleteChapter_done_func = undefined;
+                if (done_func && num_chapters_checked === num_chapters) {
+                    deleteChapter_done_func = function () {
+                        done_func(invalid_paths);
                     }
-                    num_chapters_checked += 1;
-                    // if all chapters of all refs have been checked
-                    var delete_ch_done_func = undefined;
-                    if (done_func && num_references_checked === num_references &&
-                        num_chapters_checked === num_chapters) {
-                        console.log('setting delete_ch_done_func');
-                        delete_ch_done_func = function () {
-                            done_func(invalid_paths);
-                        };
-                    }
-                    if (!exist) {
-                        invalid_paths.push(chapter.path);
-                        console.log('Could not find file at ' + chapter.path + ' removing reference in JSON');
-                        book_ref.deleteChapter(index, delete_ch_done_func);
-                    }
-                });
+                }
+
+                if (!exist) {
+                    invalid_paths.push(chapter.path);
+                    console.log('Could not find file at ' + chapter.path + ' removing reference in JSON');
+                    ch_book_ref.deleteChapter(index, deleteChapter_done_func);
+                } else if (deleteChapter_done_func && invalid_paths.length > 0) {
+                    deleteChapter_done_func();
+                }
             });
         });
     };
