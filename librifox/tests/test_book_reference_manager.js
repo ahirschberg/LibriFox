@@ -106,32 +106,37 @@ describe('BookReferenceManager()', function () {
             expect(ch0_ref).to.have.property('name', 'Introduction');
         });
     });
-    describe('functions of returned book reference', function () {
-        describe('#eachReference()', function () {
-            it('takes a function and passes it each book key in local_storage', function () {
-                store['abcdef'] = {
-                    0: {
-                        path: 'bad'
-                    }
-                };
-                brm.storeJSONReference(BOOK_OBJECT, CHAPTER_OBJECT, 'this/is/path');
+    describe('#eachReference()', function () {
+        it('takes a function and passes it each book key in local_storage', function () {
+            store['abcdef'] = {
+                0: {
+                    path: 'bad'
+                }
+            };
+            brm.storeJSONReference(BOOK_OBJECT, CHAPTER_OBJECT, 'this/is/path');
 
-                var result = [];
-                console.log(ls_proto.getItem('abcdef'));
-                brm.eachReference(function (obj) {
-                    result.push(obj[0].path);
-                });
-
-                expect(result.length).to.equal(2);
-                expect(result).to.contain('this/is/path');
-                expect(result).not.to.contain('bad');
+            var result = [];
+            console.log(ls_proto.getItem('abcdef'));
+            brm.eachReference(function (obj) {
+                result.push(obj[0].path);
             });
-            it('objects have helper functions', function () {
-                brm.eachReference(function (obj) {
-                    expect(obj).property('eachChapter').to.be.a('function');
-                });
+
+            expect(result.length).to.equal(2);
+            expect(result).to.contain('this/is/path');
+            expect(result).not.to.contain('bad');
+        });
+        it('objects have helper functions', function () {
+            brm.eachReference(function (obj) {
+                expect(obj).property('eachChapter').to.be.a('function');
             });
         });
+    });
+    describe('#everyChapter()', function () {
+        it('iterates every chapter of every reference', function () {
+            // todo
+        });
+    });
+    describe('functions of returned book reference', function () {
         describe('#deleteChapter()', function () {
             it('deletes the chapter with the given index and writes to local_storage', function () {
                 var mock_book = {
