@@ -337,10 +337,11 @@ function BookReferenceManager(args) {
                     if (this_book_ref.numChapters() === 0) {
                         remove_book_from_references(this_book_ref.id);
                     } else {
-                    obj_storage[key] = this_book_ref;
-                    local_storage.setItem(key, JSON.stringify(this_book_ref));
-                    success_fn && success_fn();
+                        obj_storage[key] = this_book_ref;
+                        local_storage.setItem(key, JSON.stringify(this_book_ref));
                     }
+                    success_fn && success_fn();
+
                 },
                 function (err) {
                     alert('Error deleting chapter with index ' + index + '. ' + err.name)
@@ -407,13 +408,46 @@ function BookReferenceValidator(args) {
     var fileManager = args.fileManager,
         referenceManager = args.referenceManager;
     
-    this.validateMetadata = function () {
+    this.validateMetadata = function (done_func) {
+        var num_references = 0,
+            num_references_checked = 0,
+            old_book_ref = undefined,
+            invalid_paths = [];
+        if (done_func) { // don't bother checking length if it won't matter
+            referenceManager.eachReference(function () {
+                num_references += 1
+            });
+        }
+        
         referenceManager.eachReference(function (book_ref) {
+            var num_chapters = 0,
+                num_chapters_checked = 0;
+            if (done_func) { 
+                num_chapters = book_ref.numChapters()
+            }
             book_ref.eachChapter(function (chapter, index) {
                 fileManager.testForFile(chapter.path, function (exist) {
+                    // increment num_references_checked within deepest callback
+                    // because otherwise it will always == num_references
+                    // ASK is there a better way to deal with callbacks?
+                    if (book_ref !== old_book_ref) { 
+                        num_references_checked += 1;
+                        old_book_ref = book_ref;
+                    }
+                    num_chapters_checked += 1;
+                    // if all chapters of all refs have been checked
+                    var delete_ch_done_func = undefined;
+                    if (done_func && num_references_checked === num_references &&
+                        num_chapters_checked === num_chapters) {
+                        console.log('setting delete_ch_done_func');
+                        delete_ch_done_func = function () {
+                            done_func(invalid_paths);
+                        };
+                    }
                     if (!exist) {
+                        invalid_paths.push(chapter.path);
                         console.log('Could not find file at ' + chapter.path + ' removing reference in JSON');
-                        book_ref.deleteChapter(index);
+                        book_ref.deleteChapter(index, delete_ch_done_func);
                     }
                 });
             });
@@ -455,7 +489,7 @@ function FilesystemBookReferenceManager(args) {
         done_enumerating = false;
         fileManager.enumerateFiles({
             enumerate_path: 'LibriFox Audiobooks',
-            match: /.*\.lfa/, // match all files with .mp3 or .lfa extension
+            match: /.*\.lfa/,
             func_each: function (result, match_arr) {
                 id3(result, function (err, tags) {
                     var book_result = addBook(tags, result.name);
@@ -556,38 +590,6 @@ function FilesystemBookReferenceManager(args) {
     function isValidIndex(index) { // also duplicated! needs fix!
         return /^\d+$/.test(index)
     }
-}
-
-var bookReferenceManager = new BookReferenceManager({
-        storageManager: bookStorageManager
-    }),
-    bookStorageManager = new BookStorageManager({
-        storageDevice: lf_getDeviceStorage(),
-        referenceManager: bookReferenceManager
-    }),
-    bookDownloadManager = new BookDownloadManager({
-        httpRequestHandler: httpRequestHandler,
-        storageManager: bookStorageManager,
-        referenceManager: bookReferenceManager
-    }),
-    chaptersListGen = new ChaptersListPageGenerator({
-        'httpRequestHandler': httpRequestHandler,
-        'list_selector': '#chaptersList',
-        'header_selector': '#chapterHeader',
-        'bookDownloadManager': bookDownloadManager
-    }),
-    fileManager = new FileManager(lf_getDeviceStorage()),
-    fsBookReferenceManager = new FilesystemBookReferenceManager({
-        fileManager: fileManager
-    }),
-    bookReferenceValidator = new BookReferenceValidator({
-        referenceManager: bookReferenceManager,
-        fileManager: fileManager
-    }); 
-bookReferenceManager.registerStorageManager(bookStorageManager);
-if (lf_getDeviceStorage()) {
-    bookReferenceValidator.validateMetadata();
-    fsBookReferenceManager.findAllChapters();
 }
 
 function StoredBooksPageGenerator(args) {
@@ -765,7 +767,33 @@ function BookPlayerPageGenerator(args) {
     };
 }
 
-var ui_state = {},
+var bookReferenceManager = new BookReferenceManager({
+        storageManager: bookStorageManager
+    }),
+    bookStorageManager = new BookStorageManager({
+        storageDevice: lf_getDeviceStorage(),
+        referenceManager: bookReferenceManager
+    }),
+    bookDownloadManager = new BookDownloadManager({
+        httpRequestHandler: httpRequestHandler,
+        storageManager: bookStorageManager,
+        referenceManager: bookReferenceManager
+    }),
+    chaptersListGen = new ChaptersListPageGenerator({
+        'httpRequestHandler': httpRequestHandler,
+        'list_selector': '#chaptersList',
+        'header_selector': '#chapterHeader',
+        'bookDownloadManager': bookDownloadManager
+    }),
+    fileManager = new FileManager(lf_getDeviceStorage()),
+    fsBookReferenceManager = new FilesystemBookReferenceManager({
+        fileManager: fileManager
+    }),
+    bookReferenceValidator = new BookReferenceValidator({
+        referenceManager: bookReferenceManager,
+        fileManager: fileManager
+    }),
+    ui_state = {},
     storedBooksPageGenerator = new StoredBooksPageGenerator({
         bookReferenceManager: bookReferenceManager,
         fileManager: fileManager,
@@ -781,8 +809,17 @@ var ui_state = {},
             header: '.book-player-header'
         },
         ui_state: ui_state
-    });
+    }); 
 
+bookReferenceManager.registerStorageManager(bookStorageManager);
+if (lf_getDeviceStorage()) {
+    bookReferenceValidator.validateMetadata(function (invalid_paths) {
+        console.log(invalid_paths);
+        alert('Warning: the following files were not retrieved ' + invalid_paths.join(', '));
+        storedBooksPageGenerator.refreshList();
+    });
+    fsBookReferenceManager.findAllChapters();
+}
 storedBooksPageGenerator.registerEvents({
     list: '#stored-books-list',
     page: '#storedBooks',
