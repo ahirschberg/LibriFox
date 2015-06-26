@@ -18,6 +18,12 @@ describe('BookReferenceManager()', function () {
             }
         };
     });
+    
+    function clearStorage() {
+        Object.keys(store).forEach(function (key) {
+            delete store[key];
+        });
+    }
     beforeEach(function () {
         var mockStorageManager = {
             delete: function (path, success, fail) {
@@ -133,7 +139,58 @@ describe('BookReferenceManager()', function () {
     });
     describe('#everyChapter()', function () {
         it('iterates every chapter of every reference', function () {
-            // todo
+            clearStorage();
+            var book_obj_1 = {id: 9999},
+                book_obj_2 = {id: 1234};
+            brm.storeJSONReference(
+                book_obj_1,
+                {
+                   index: 0,
+                   name: 'Introduction'
+                },
+                'path2/to'
+            );
+            brm.storeJSONReference(
+                book_obj_1,
+                {
+                   index: 1,
+                   name: 'Chapter 1'
+                },
+                'path2/to'
+            );
+            brm.storeJSONReference(
+                book_obj_2,
+                {
+                   index: 0,
+                   name: 'Another Introduction'
+                },
+                'librifox/1234/0.mp3'
+            );
+            var every_chapter = [];
+            brm.everyChapter(function (chapter, book_ref, index) {
+                every_chapter.push({
+                    ch_name: chapter.name,
+                    ch_index: index,
+                    book_id: book_ref.id
+                });
+            });
+            
+            expect(every_chapter.length).to.equal(3);
+            expect(every_chapter).to.include({
+                ch_name: 'Introduction',
+                ch_index: 0,
+                book_id: 9999
+            });
+            expect(every_chapter).to.include({
+                ch_name: 'Chapter 1',
+                ch_index: 1,
+                book_id: 9999
+            });
+            expect(every_chapter).to.include({
+                ch_name: 'Another Introduction',
+                ch_index: 0,
+                book_id: 1234
+            });
         });
     });
     describe('functions of returned book reference', function () {
@@ -167,7 +224,7 @@ describe('BookReferenceManager()', function () {
             });
         });
         describe('#deleteBook()', function () { // filesystem error case is untested
-            it('deletes the book and writes to local_storage', function () {
+            it('deletes the book and writes to local_storage', function () {                
                 var mock_book = {
                     id: 9999
                 };

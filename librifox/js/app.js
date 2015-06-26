@@ -416,6 +416,12 @@ function BookReferenceValidator(args) {
     var fileManager = args.fileManager,
         referenceManager = args.referenceManager;
     
+    this.registerEvents = function (storage_device) { // NOT WORKING
+        storage_device.addEventListener('onchange', function (change) {
+            console.log('The file "' + change.path + '" has been ' + change.reason);
+        });
+    };
+    
     this.validateMetadata = function (done_func) {
         var num_chapters = 0,
             num_chapters_checked = 0,
@@ -804,6 +810,7 @@ var bookReferenceManager = new BookReferenceManager({
 
 bookReferenceManager.registerStorageManager(bookStorageManager);
 if (lf_getDeviceStorage()) {
+    bookReferenceValidator.registerEvents(lf_getDeviceStorage());
     bookReferenceValidator.validateMetadata(function (invalid_paths) {
         console.log(invalid_paths);
         alert('Warning: the following files were not retrieved ' + invalid_paths.join(', '));
