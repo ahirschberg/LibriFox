@@ -417,8 +417,9 @@ function BookReferenceValidator(args) {
         referenceManager = args.referenceManager;
     
     this.registerEvents = function (storage_device) { // NOT WORKING
-        storage_device.addEventListener('onchange', function (change) {
-            console.log('The file "' + change.path + '" has been ' + change.reason);
+        //console.log('registerEvents called with storage', storage_device);
+        storage_device.addEventListener("change", function (event) {
+            console.log('The file "' + event.path + '" has been ' + event.reason);
         });
     };
     
@@ -499,6 +500,10 @@ function FilesystemBookReferenceManager(args) {
                 });
             }
         });
+    };
+    
+    this.createUserFolder = function () {
+        fileManager.addFile(new Blob([''], {type: "text/plain"}), 'LibriFox Audiobooks/.empty');
     };
     
     this.setCallback = function (each_book) {
@@ -606,11 +611,27 @@ function StoredBooksPageGenerator(args) {
             that.refreshList();
         });
         $(document).on('pagecreate', selectors.page, function () {
-            $(selectors.popup_options).bind({
+            $(selectors.book_actions_popup).bind({
                 popupafterclose: function (event, ui) {
-                    $(selectors.popup_options + ' .delete_book').unbind('click');
+                    $(selectors.book_actions_popup + ' .delete_book').unbind('click');
                 }
             });
+            
+            // if this ever becomes the non-default page, move this code to new default!
+
+            if (!localStorage.getItem('not_first_time')) { // double negative :(
+                localStorage.setItem('not_first_time', true);
+                
+                // for some jqm reason, must be inside a setTimeout or it will 
+                // not display correctly on page.
+                setTimeout(function () {
+                    $(selectors.create_lfa_folder_dialog).popup('open', {positionTo: 'window'});
+                }, 0);
+                
+                $(selectors.create_lfa_folder_dialog + ' .yes_create_folder').click(function () {
+                    fsBookReferenceManager.createUserFolder();
+                });
+            }
         });
     };
     
@@ -623,11 +644,11 @@ function StoredBooksPageGenerator(args) {
         referenceManager.eachReference(function (obj) {
             createListItem(obj).bind('taphold', function () {
                 var that = this;
-                $(selectors.popup_options).popup('open', {
+                $(selectors.book_actions_popup).popup('open', {
                     transition: 'pop',
                     positionTo: that // neat, positions over the held element!
                 });
-                $(selectors.popup_options + ' .delete_book').click(function () {
+                $(selectors.book_actions_popup + ' .delete_book').click(function () {
                     obj.deleteBook(function () {
                             $(that).remove();
                             $list.listview('refresh');
@@ -635,7 +656,7 @@ function StoredBooksPageGenerator(args) {
                         function () {
                             alert('Not all the chapters could be deleted, likely a Firefox OS filesystem issue. Retry after restarting your device.');
                         });
-                    $(selectors.popup_options).popup('close');
+                    $(selectors.book_actions_popup).popup('close');
                 });
             }).appendTo($list);
         });
@@ -676,29 +697,28 @@ function StoredChaptersPageGenerator(args) {
             $(selectors.header_title).text(ui_state.book_ref.title);
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
-            console.log(ui_state.book_ref);
             ui_state.book_ref.eachChapter(function (chapter_ref, index) {
                 createListItem(chapter_ref).bind('taphold', function () {
                     var that = this;
-                    $(selectors.popup_options).popup('open', {
+                    $(selectors.book_actions_popup).popup('open', {
                         transition: 'pop',
                         positionTo: that // neat, positions over the held element!
                     });
-                    $(selectors.popup_options + ' .delete_chapter').click(function () {
+                    $(selectors.book_actions_popup + ' .delete_chapter').click(function () {
                         ui_state.book_ref.deleteChapter(index, function () {
                             $(that).remove();
                             $(selectors.page + ' ul').listview('refresh');
                         })
-                        $(selectors.popup_options).popup('close');
+                        $(selectors.book_actions_popup).popup('close');
                     });
                 }).appendTo($list);
             });
             $list.listview('refresh');
         });
         $(document).on('pagecreate', selectors.page, function () {
-            $(selectors.popup_options).bind({
+            $(selectors.book_actions_popup).bind({
                 popupafterclose: function (event, ui) {
-                    $(selectors.popup_options + ' .delete_chapter').unbind('click');
+                    $(selectors.book_actions_popup + ' .delete_chapter').unbind('click');
                 }
             });
         });
@@ -821,13 +841,14 @@ if (lf_getDeviceStorage()) {
 storedBooksPageGenerator.registerEvents({
     list: '#stored-books-list',
     page: '#storedBooks',
-    popup_options: '#bookActionsMenu'
+    book_actions_popup: '#bookActionsMenu',
+    create_lfa_folder_dialog: '#create_folder_dialog'
 });
 storedChaptersPageGenerator.registerEvents({
     header_title: '.chapter-title',
     list: '#stored-chapters-list',
     page: '#storedChapters',
-    popup_options: '#chapterActionsMenu'
+    book_actions_popup: '#chapterActionsMenu'
 });
 bookPlayerPageGenerator.registerEvents({page: '#book-player'});
 
@@ -903,6 +924,10 @@ function FileManager(storage_device) {
         
     };
 
+    this.addFile = function (blob, filepath) {
+        storage_device.addNamed(blob, filepath);
+    };
+    
     this.deleteAllAppFiles = function () {
         var enumeration_cb = function (result) {
             console.log(result.name + ' will be deleted');
