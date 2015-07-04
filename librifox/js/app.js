@@ -241,7 +241,7 @@ function BookStorageManager(args) {
 
 function BookReferenceManager(args) {
     var args = args || {},
-        local_storage = args.localStorage || localStorage,
+        async_storage = args.asyncStorage,
         obj_storage = {},
         that = this,
         storageManager = args.storageManager,
@@ -253,47 +253,51 @@ function BookReferenceManager(args) {
         if (!isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
-        var obj   = that.loadJSONReference(book_obj.id) || {};
-        obj.title = obj.title || book_obj.title;
-        obj.id    = obj.id    || book_obj.id;
-        
-        if (!isValidIndex(chapter_obj.index)) {
-            throw new Error('chapter_obj.index is not a valid index: ' + chapter_obj.index);
-        }
-        obj[chapter_obj.index] = {
-            path: path,
-            name: chapter_obj.name
-        };
-        local_storage.setItem(JSON_PREFIX + book_obj.id, JSON.stringify(obj));
-        applyHelperFunctions(obj);
-        obj_storage[JSON_PREFIX + book_obj.id] = obj;
+        that.loadJSONReference(book_obj.id, function (obj) {
+            var obj = obj || {};
+            obj.title = obj.title || book_obj.title;
+            obj.id    = obj.id    || book_obj.id;
+
+            if (!isValidIndex(chapter_obj.index)) {
+                throw new Error('chapter_obj.index is not a valid index: ' + chapter_obj.index);
+            }
+            obj[chapter_obj.index] = {
+                path: path,
+                name: chapter_obj.name
+            };
+            async_storage.setItem(JSON_PREFIX + book_obj.id, obj);
+            applyHelperFunctions(obj);
+            obj_storage[JSON_PREFIX + book_obj.id] = obj;
+        });
     };
 
-    this.loadJSONReference = function (book_id, prefix) {
+    this.loadJSONReference = function (book_id, load_callback, prefix) {
         if (!prefix && prefix !== '') { // allow null prefix, but default to JSON_PREFIX. this is bad behavior :(
             prefix = JSON_PREFIX;
         }
         var os_book_ref = obj_storage[prefix + book_id];
         if (os_book_ref) {
-            return os_book_ref;
+            load_callback(os_book_ref);
         } else {
-            try {
-                var ls_book_ref = JSON.parse(local_storage.getItem(prefix + book_id));
-                applyHelperFunctions(ls_book_ref);
-                obj_storage[prefix + book_id] = ls_book_ref;
-                return ls_book_ref;
-            } catch (err) {
-                console.warn('Failed to parse JSON for book ' + key);
-                alert('Error: could not parse JSON data for book ' + key);
-            }
+            async_storage.getItem( (prefix + book_id), function (obj) {
+                applyHelperFunctions(obj);
+                obj_storage[prefix + book_id] = obj;
+                load_callback(obj);
+            });
         }
     };
 
     this.eachReference = function (each_fn) {
-        Object.keys(local_storage).forEach(function (key) {
-            if (key.startsWith(JSON_PREFIX) && local_storage.hasOwnProperty(key)) {
-                var book_ref = that.loadJSONReference(key, '');
-                each_fn(book_ref);
+        async_storage.length(function(length) {
+            var i;
+            for (i = 0; i < length; i++) {
+                async_storage.key(i, function(key) {
+                    if (key.startsWith(JSON_PREFIX)) {
+                        that.loadJSONReference(key, function (book_ref) {
+                            each_fn(book_ref);
+                        }, '');
+                    }
+                });
             }
         });
     };
@@ -331,8 +335,8 @@ function BookReferenceManager(args) {
 
         var remove_book_from_references = function (id) {
             console.log('Completely removing book with id ' + id);
-            local_storage.removeItem(JSON_PREFIX + id);
             delete obj_storage[JSON_PREFIX + id];
+            async_storage.removeItem(JSON_PREFIX + id);
 
         };
         book_ref.deleteChapter = function (index, success_fn) {
@@ -346,7 +350,7 @@ function BookReferenceManager(args) {
                         remove_book_from_references(this_book_ref.id);
                     } else {
                         obj_storage[key] = this_book_ref;
-                        local_storage.setItem(key, JSON.stringify(this_book_ref));
+                        async_storage.setItem(key, this_book_ref);
                     }
                     success_fn && success_fn();
 
@@ -377,7 +381,7 @@ function BookReferenceManager(args) {
                         } else {
                             console.warn('Unable to fully remove book "' + this_book_ref.title + '". Errors were encountered when attempting to delete files.');
                             obj_storage[JSON_PREFIX + this_book_ref.id] = undefined;
-                            local_storage.setItem(JSON_PREFIX + this_book_ref.id, JSON.stringify(this_book_ref));
+                            async_storage.setItem(JSON_PREFIX + this_book_ref.id, this_book_ref);
 
                             error_fn && error_fn();
                         }
@@ -793,7 +797,8 @@ function SettingsPageGenerator(args) {
 }
 
 var bookReferenceManager = new BookReferenceManager({
-        storageManager: bookStorageManager
+        storageManager: bookStorageManager,
+        asyncStorage: asyncStorage
     }),
     bookStorageManager = new BookStorageManager({
         storageDevice: lf_getDeviceStorage(),
