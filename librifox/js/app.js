@@ -616,22 +616,6 @@ function StoredBooksPageGenerator(args) {
                     $(selectors.book_actions_popup + ' .delete_book').unbind('click');
                 }
             });
-            
-            // if this ever becomes the non-default page, move this code to new default!
-
-            if (!localStorage.getItem('not_first_time')) { // double negative :(
-                localStorage.setItem('not_first_time', true);
-                
-                // for some jqm reason, must be inside a setTimeout or it will 
-                // not display correctly on page.
-                setTimeout(function () {
-                    $(selectors.create_lfa_folder_dialog).popup('open', {positionTo: 'window'});
-                }, 0);
-                
-                $(selectors.create_lfa_folder_dialog + ' .yes_create_folder').click(function () {
-                    fsBookReferenceManager.createUserFolder();
-                });
-            }
         });
     };
     
@@ -784,6 +768,30 @@ function BookPlayerPageGenerator(args) {
     };
 }
 
+function SettingsPageGenerator(args) {
+    var settings = args.settings;
+    
+    this.registerEvents = function (selectors) {
+        var folder_path_form = selectors.folder_path_form;
+        
+        if (!selectors.page) {
+            console.warn('settings_page selector is falsy! this is probably not what you meant to do.');
+        }
+        
+        $(document).on('pagecreate', selectors.page, function () {
+            var input_selector = selectors.page + ' ' + folder_path_form + ' input';
+            $(input_selector).val(settings.user_folder);
+            $(selectors.page + ' ' + folder_path_form).submit(function () {
+                var path = $(input_selector).val();
+                console.log('Path was ' + path);
+                settings.user_folder = path;
+                
+                return false;
+            });
+        });
+    };
+}
+
 var bookReferenceManager = new BookReferenceManager({
         storageManager: bookStorageManager
     }),
@@ -811,9 +819,11 @@ var bookReferenceManager = new BookReferenceManager({
         fileManager: fileManager
     }),
     ui_state = {},
+    settings = {
+        user_folder: undefined
+    },
     storedBooksPageGenerator = new StoredBooksPageGenerator({
         bookReferenceManager: bookReferenceManager,
-        fileManager: fileManager,
         fsBookReferenceManager: fsBookReferenceManager,
         ui_state: ui_state
     }),
@@ -826,7 +836,10 @@ var bookReferenceManager = new BookReferenceManager({
             header: '.book-player-header'
         },
         ui_state: ui_state
-    }); 
+    }),
+    settingsPageGenerator = new SettingsPageGenerator({
+        settings: settings
+    });
 
 bookReferenceManager.registerStorageManager(bookStorageManager);
 if (lf_getDeviceStorage()) {
@@ -851,6 +864,10 @@ storedChaptersPageGenerator.registerEvents({
     book_actions_popup: '#chapterActionsMenu'
 });
 bookPlayerPageGenerator.registerEvents({page: '#book-player'});
+settingsPageGenerator.registerEvents({
+    page: '#mainSettings',
+    folder_path_form: '#user-folder-form'
+});
 
 $(document).on("pageshow", "#homeFileManager", function () {
     $('#deleteAll').click(function () {
