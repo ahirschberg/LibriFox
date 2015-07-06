@@ -1,3 +1,7 @@
+// helpful for debugging asyncStorage, 
+// a callback that prints its arguments
+var debug_print_cbk = function () { console.log(arguments); };
+
 // disables firefox taphold popup menu in firefox os 2.2+
 window.oncontextmenu = function(event) {
      event.preventDefault();
@@ -462,9 +466,8 @@ function FilesystemBookReferenceManager(args) {
     'use strict';
     
     var fileManager = args.fileManager,
+        settings = args.settings,
         each_book_callback,
-        done_all_callback,
-        done_enumerating,
         books = this.books = (function () {
             var books_store = {};
             return {
@@ -488,26 +491,28 @@ function FilesystemBookReferenceManager(args) {
         })();
 
     this.findAllChapters = function (passed_in_func_each) {
-        done_enumerating = false;
-        fileManager.enumerateFiles({
-            enumerate_path: 'LibriFox Audiobooks',
-            match: /.*\.lfa/,
-            func_each: function (result) {
-                id3(result, function (err, tags) {
-                    var book_result = addBook(tags, result.name);
-                    if (book_result.isNew) {
-                        if (each_book_callback) {
-                            each_book_callback(book_result.book);
+        settings.getAsync('user_folder', function (user_audio_folder) {
+            fileManager.enumerateFiles({
+                enumerate_path: user_audio_folder,
+                match: /.*\.lfa/,
+                func_each: function (result) {
+                    id3(result, function (err, tags) {
+                        var book_result = addBook(tags, result.name);
+                        if (book_result.isNew) {
+                            if (each_book_callback) {
+                                each_book_callback(book_result.book);
+                            }
                         }
-                    }
-                    passed_in_func_each && passed_in_func_each();
-                });
-            }
+                        passed_in_func_each && passed_in_func_each();
+                    });
+                }
+            });
         });
     };
     
-    this.createUserFolder = function () {
-        fileManager.addFile(new Blob([''], {type: "text/plain"}), 'LibriFox Audiobooks/.empty');
+    this.createFolder = function (path) {
+        var path = path.replace(/\/*$/, ''); // remove trailing / characters
+        fileManager.addFile(new Blob([''], {type: "text/plain"}), path + '/.empty');
     };
     
     this.setCallback = function (each_book) {
@@ -610,8 +615,8 @@ function StoredBooksPageGenerator(args) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
-        $(document).on('pageshow', selectors.page, function () {
-            console.log('pageshow called for ' + selectors.page);
+        $(document).on('pagecreate', selectors.page, function () {
+            console.log('pagecreate called for ' + selectors.page);
             that.refreshList();
         });
         $(document).on('pagecreate', selectors.page, function () {
@@ -646,9 +651,9 @@ function StoredBooksPageGenerator(args) {
                         });
                     $(selectors.book_actions_popup).popup('close');
                 });
-            }).appendTo($list);
+            }).appendTo($list);        
+            $list.listview('refresh');
         });
-        $list.listview('refresh');
         fsReferenceManager.setCallback(function (book_ref) {
             createListItem(book_ref)
                 .addClass('filesystem_book')
@@ -772,6 +777,63 @@ function BookPlayerPageGenerator(args) {
     };
 }
 
+function SettingsManager (args) {
+    var settings,
+        async_storage = args.asyncStorage,
+        st_settings_key = 'lf_settings';
+    
+    // man async is really ugly
+    var loadSettings = (function () {
+        var already_loading = false,
+            callbacks = [];
+        return function (load_callback) {
+            callbacks.push(load_callback);
+            if (!already_loading) {
+                already_loading = true;
+                async_storage.getItem(st_settings_key, function (obj) {
+                    var obj = obj || generateDefaultSettings();
+
+                    callbacks.forEach(function (cbk) {
+                        cbk(obj);
+                    });
+                });
+            }
+        };
+    })();
+    
+    loadSettings(function (_settings) {
+        settings = _settings;
+    });
+    
+    function generateDefaultSettings () {
+        return {
+            user_folder: undefined
+        };
+    }
+    
+    this.set = function (key, value) {
+        settings[key] = value;
+        console.log('settings object is now', settings);
+
+        async_storage.setItem(st_settings_key, settings);
+    };
+    this.get = function (key) {
+        if (!settings) {
+            console.error(
+                'Looks like you tried to load settings before ' +
+                'they were retrieved. If the problem persists, ' +
+                'contact the developer');
+        }
+        return settings[key];
+    };
+    
+    this.getAsync = function (key, callback) {
+        loadSettings(function (settings) {
+            console.log('getAsync settings:', settings);
+            callback(settings[key]);
+        });
+    };
+}
 function SettingsPageGenerator(args) {
     var settings = args.settings;
     
@@ -784,11 +846,11 @@ function SettingsPageGenerator(args) {
         
         $(document).on('pagecreate', selectors.page, function () {
             var input_selector = selectors.page + ' ' + folder_path_form + ' input';
-            $(input_selector).val(settings.user_folder);
+            $(input_selector).val(settings.get('user_folder'));
             $(selectors.page + ' ' + folder_path_form).submit(function () {
                 var path = $(input_selector).val();
                 console.log('Path was ' + path);
-                settings.user_folder = path;
+                settings.set('user_folder', path);
                 
                 return false;
             });
@@ -816,22 +878,11 @@ var bookReferenceManager = new BookReferenceManager({
         'bookDownloadManager': bookDownloadManager
     }),
     fileManager = new FileManager(lf_getDeviceStorage()),
-    fsBookReferenceManager = new FilesystemBookReferenceManager({
-        fileManager: fileManager
-    }),
     bookReferenceValidator = new BookReferenceValidator({
         referenceManager: bookReferenceManager,
         fileManager: fileManager
     }),
     ui_state = {},
-    settings = {
-        user_folder: undefined
-    },
-    storedBooksPageGenerator = new StoredBooksPageGenerator({
-        bookReferenceManager: bookReferenceManager,
-        fsBookReferenceManager: fsBookReferenceManager,
-        ui_state: ui_state
-    }),
     storedChaptersPageGenerator = new StoredChaptersPageGenerator({
         ui_state: ui_state
     }),
@@ -840,6 +891,18 @@ var bookReferenceManager = new BookReferenceManager({
             audio: '#audioSource',
             header: '.book-player-header'
         },
+        ui_state: ui_state
+    }),
+    settings = new SettingsManager({
+        asyncStorage: asyncStorage
+    }),
+    fsBookReferenceManager = new FilesystemBookReferenceManager({
+        fileManager: fileManager,
+        settings: settings
+    }),
+    storedBooksPageGenerator = new StoredBooksPageGenerator({
+        bookReferenceManager: bookReferenceManager,
+        fsBookReferenceManager: fsBookReferenceManager,
         ui_state: ui_state
     }),
     settingsPageGenerator = new SettingsPageGenerator({
