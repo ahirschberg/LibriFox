@@ -200,7 +200,7 @@ var lf_getDeviceStorage = function (storage_str) {
 
 function BookStorageManager(args) {
     var that = this,
-        storageDevice = args.storageDevice,
+        deviceStoragesManager = args.deviceStoragesManager,
         referenceManager = args.referenceManager;
 
     this.writeChapter = function (blob, book_obj, chapter_obj, func_done) {
@@ -213,7 +213,7 @@ function BookStorageManager(args) {
 
     this.write = function (blob, path, success_fn) {
         console.log('writing:', blob, path);
-        var request = storageDevice.addNamed(blob, path);
+        var request = deviceStoragesManager.getDownloadsDevice().addNamed(blob, path);
         if (request) {
             request.onsuccess = function () {
                 console.log('wrote: ' + this.result);
@@ -510,10 +510,10 @@ function FilesystemBookReferenceManager(args) {
         });
     };
     
-    this.createFolder = function (path) {
+/*    this.createFolder = function (path) {
         var path = path.replace(/\/*$/, ''); // remove trailing / characters
         fileManager.addFile(new Blob([''], {type: "text/plain"}), path + '/.empty');
-    };
+    };*/
     
     this.setCallback = function (each_book) {
         books.eachReference(function (book) { // in case books are parsed before callback is set
@@ -615,8 +615,8 @@ function StoredBooksPageGenerator(args) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
-        $(document).on('pagecreate', selectors.page, function () {
-            console.log('pagecreate called for ' + selectors.page);
+        $(document).on('pageshow', selectors.page, function () {
+            console.log('pageshow called for ' + selectors.page);
             that.refreshList();
         });
         $(document).on('pagecreate', selectors.page, function () {
@@ -806,8 +806,9 @@ function SettingsManager (args) {
     });
     
     function generateDefaultSettings () {
-        return {
-            user_folder: undefined
+        return { // should I bother showing what keys will be used here?
+            user_folder: undefined,
+            downloads_storage_device_index: undefined
         };
     }
     
@@ -835,7 +836,8 @@ function SettingsManager (args) {
     };
 }
 function SettingsPageGenerator(args) {
-    var settings = args.settings;
+    var settings = args.settings,
+        deviceStoragesManager = args.deviceStoragesManager;
     
     this.registerEvents = function (selectors) {
         var folder_path_form = selectors.folder_path_form;
@@ -854,16 +856,62 @@ function SettingsPageGenerator(args) {
                 
                 return false;
             });
+            
+            deviceStoragesManager.eachDevice(function (storage, index) {
+                $('#sdcard-picker').append(
+                    $('<li/>')
+                        .html( $('<a/>')
+                            .text('sdcard' + index)
+                            .click(function () {
+                                deviceStoragesManager.setDownloadsDeviceByIndex(index);
+                            })
+                        )
+                    );
+                $('#sdcard-picker').listview('refresh');
+            });
         });
     };
 }
 
-var bookReferenceManager = new BookReferenceManager({
+function DeviceStoragesManager(args) {
+    var settings = args.settings,
+        downloads_storage_index = 0,
+        nav = args.navigator || navigator;
+    
+    settings.getAsync('downloads_storage_device_index', function (value) {
+        downloads_storage_index = value || 0;
+    });
+    
+    this.setDownloadsDeviceByIndex = function (index) {
+        if (isFinite(index) && Math.floor(index) == index) {
+            settings.set('downloads_storage_device_index', index);
+            downloads_storage_index = index;
+        } else {
+            console.error('The index ' + index + ' was not valid');
+        }
+    };
+    
+    this.getDownloadsDevice = function () {
+        return nav.getDeviceStorages('sdcard')[downloads_storage_index];
+    };
+    
+    this.eachDevice = function (func_each) {
+        nav.getDeviceStorages('sdcard').forEach(func_each);
+    }
+} 
+
+var settings = new SettingsManager({
+        asyncStorage: asyncStorage
+    }),
+    deviceStoragesManager = new DeviceStoragesManager({
+        settings: settings    
+    }),
+    bookReferenceManager = new BookReferenceManager({
         storageManager: bookStorageManager,
         asyncStorage: asyncStorage
     }),
     bookStorageManager = new BookStorageManager({
-        storageDevice: lf_getDeviceStorage(),
+        deviceStoragesManager: deviceStoragesManager,
         referenceManager: bookReferenceManager
     }),
     bookDownloadManager = new BookDownloadManager({
@@ -893,9 +941,6 @@ var bookReferenceManager = new BookReferenceManager({
         },
         ui_state: ui_state
     }),
-    settings = new SettingsManager({
-        asyncStorage: asyncStorage
-    }),
     fsBookReferenceManager = new FilesystemBookReferenceManager({
         fileManager: fileManager,
         settings: settings
@@ -906,7 +951,8 @@ var bookReferenceManager = new BookReferenceManager({
         ui_state: ui_state
     }),
     settingsPageGenerator = new SettingsPageGenerator({
-        settings: settings
+        settings: settings,
+        deviceStoragesManager: deviceStoragesManager
     });
 
 bookReferenceManager.registerStorageManager(bookStorageManager);
