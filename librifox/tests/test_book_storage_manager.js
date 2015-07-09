@@ -11,12 +11,17 @@ describe('BookStorageManager()', function () {
                 return request;
             }
         };
+        var deviceStoragesManager = {
+            getDownloadsDevice: function () {
+                return storageDevice;
+            }
+        };
         var referenceMgrStub = {
             storeJSONReference: function () {}
         };
         referenceMgrSpy = sinon.spy(referenceMgrStub, 'storeJSONReference');
         bsm = new BookStorageManager({
-            storageDevice: storageDevice,
+            deviceStoragesManager: deviceStoragesManager,
             referenceManager: referenceMgrStub
         });
     });

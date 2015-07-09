@@ -780,30 +780,34 @@ function BookPlayerPageGenerator(args) {
 function SettingsManager (args) {
     var settings,
         async_storage = args.asyncStorage,
-        st_settings_key = 'lf_settings';
+        st_settings_key = 'lf_settings',
+        that = this;
     
     // man async is really ugly
     var loadSettings = (function () {
         var already_loading = false,
             callbacks = [];
         return function (load_callback) {
-            callbacks.push(load_callback);
+            if (!settings) {
+                callbacks.push(load_callback);
+            }
             if (!already_loading) {
                 already_loading = true;
                 async_storage.getItem(st_settings_key, function (obj) {
                     var obj = obj || generateDefaultSettings();
-
-                    callbacks.forEach(function (cbk) {
-                        cbk(obj);
+                    settings = obj;
+                    callbacks.forEach(function (cbk, index) {
+                        cbk && cbk(obj);
                     });
                 });
+            } else if (settings) {
+                console.log('loadSettings was called, but settings was already loaded');
+                load_callback(settings);
             }
         };
     })();
     
-    loadSettings(function (_settings) {
-        settings = _settings;
-    });
+    loadSettings();
     
     function generateDefaultSettings () {
         return { // should I bother showing what keys will be used here?
@@ -822,8 +826,7 @@ function SettingsManager (args) {
         if (!settings) {
             console.error(
                 'Looks like you tried to load settings before ' +
-                'they were retrieved. If the problem persists, ' +
-                'contact the developer');
+                'they were retrieved. Use getAsync instead!');
         }
         return settings[key];
     };
@@ -898,98 +901,7 @@ function DeviceStoragesManager(args) {
     this.eachDevice = function (func_each) {
         nav.getDeviceStorages('sdcard').forEach(func_each);
     }
-} 
-
-var settings = new SettingsManager({
-        asyncStorage: asyncStorage
-    }),
-    deviceStoragesManager = new DeviceStoragesManager({
-        settings: settings    
-    }),
-    bookReferenceManager = new BookReferenceManager({
-        storageManager: bookStorageManager,
-        asyncStorage: asyncStorage
-    }),
-    bookStorageManager = new BookStorageManager({
-        deviceStoragesManager: deviceStoragesManager,
-        referenceManager: bookReferenceManager
-    }),
-    bookDownloadManager = new BookDownloadManager({
-        httpRequestHandler: httpRequestHandler,
-        storageManager: bookStorageManager,
-        referenceManager: bookReferenceManager
-    }),
-    chaptersListGen = new ChaptersListPageGenerator({
-        'httpRequestHandler': httpRequestHandler,
-        'list_selector': '#chaptersList',
-        'header_selector': '#chapterHeader',
-        'bookDownloadManager': bookDownloadManager
-    }),
-    fileManager = new FileManager(lf_getDeviceStorage()),
-    bookReferenceValidator = new BookReferenceValidator({
-        referenceManager: bookReferenceManager,
-        fileManager: fileManager
-    }),
-    ui_state = {},
-    storedChaptersPageGenerator = new StoredChaptersPageGenerator({
-        ui_state: ui_state
-    }),
-    bookPlayerPageGenerator = new BookPlayerPageGenerator({
-        selectors: {
-            audio: '#audioSource',
-            header: '.book-player-header'
-        },
-        ui_state: ui_state
-    }),
-    fsBookReferenceManager = new FilesystemBookReferenceManager({
-        fileManager: fileManager,
-        settings: settings
-    }),
-    storedBooksPageGenerator = new StoredBooksPageGenerator({
-        bookReferenceManager: bookReferenceManager,
-        fsBookReferenceManager: fsBookReferenceManager,
-        ui_state: ui_state
-    }),
-    settingsPageGenerator = new SettingsPageGenerator({
-        settings: settings,
-        deviceStoragesManager: deviceStoragesManager
-    });
-
-bookReferenceManager.registerStorageManager(bookStorageManager);
-if (lf_getDeviceStorage()) {
-    bookReferenceValidator.registerEvents(lf_getDeviceStorage());
-    bookReferenceValidator.validateMetadata(function (invalid_paths) {
-        console.log(invalid_paths);
-        alert('Warning: the following files were not retrieved ' + invalid_paths.join(', '));
-        storedBooksPageGenerator.refreshList();
-    });
-    fsBookReferenceManager.findAllChapters();
 }
-storedBooksPageGenerator.registerEvents({
-    list: '#stored-books-list',
-    page: '#storedBooks',
-    book_actions_popup: '#bookActionsMenu',
-    create_lfa_folder_dialog: '#create_folder_dialog'
-});
-storedChaptersPageGenerator.registerEvents({
-    header_title: '.chapter-title',
-    list: '#stored-chapters-list',
-    page: '#storedChapters',
-    book_actions_popup: '#chapterActionsMenu'
-});
-bookPlayerPageGenerator.registerEvents({page: '#book-player'});
-settingsPageGenerator.registerEvents({
-    page: '#mainSettings',
-    folder_path_form: '#user-folder-form'
-});
-
-$(document).on("pageshow", "#homeFileManager", function () {
-    $('#deleteAll').click(function () {
-        fileManager.deleteAllAppFiles();
-        localStorage.clear(); // remove references
-    });
-    fileManager.displayAppFiles();
-});
 
 function FileManager(storage_device) {
     var that = this;
@@ -1219,4 +1131,99 @@ function HttpRequestHandler() {
     this.getBlob = function (url, load_callback, other_args) {
         that.getDataFromUrl(url, 'blob', load_callback, other_args);
     };
+}
+
+// Instantiate app if not running in test environment
+if (lf_getDeviceStorage()) {
+    createApp();
+}
+function createApp () {
+    var settings = new SettingsManager({
+            asyncStorage: asyncStorage
+        }),
+        deviceStoragesManager = new DeviceStoragesManager({
+            settings: settings    
+        }),
+        bookReferenceManager = new BookReferenceManager({
+            storageManager: bookStorageManager,
+            asyncStorage: asyncStorage
+        }),
+        bookStorageManager = new BookStorageManager({
+            deviceStoragesManager: deviceStoragesManager,
+            referenceManager: bookReferenceManager
+        }),
+        bookDownloadManager = new BookDownloadManager({
+            httpRequestHandler: httpRequestHandler,
+            storageManager: bookStorageManager,
+            referenceManager: bookReferenceManager
+        }),
+        chaptersListGen = new ChaptersListPageGenerator({
+            'httpRequestHandler': httpRequestHandler,
+            'list_selector': '#chaptersList',
+            'header_selector': '#chapterHeader',
+            'bookDownloadManager': bookDownloadManager
+        }),
+        fileManager = new FileManager(lf_getDeviceStorage()),
+        bookReferenceValidator = new BookReferenceValidator({
+            referenceManager: bookReferenceManager,
+            fileManager: fileManager
+        }),
+        ui_state = {},
+        storedChaptersPageGenerator = new StoredChaptersPageGenerator({
+            ui_state: ui_state
+        }),
+        bookPlayerPageGenerator = new BookPlayerPageGenerator({
+            selectors: {
+                audio: '#audioSource',
+                header: '.book-player-header'
+            },
+            ui_state: ui_state
+        }),
+        fsBookReferenceManager = new FilesystemBookReferenceManager({
+            fileManager: fileManager,
+            settings: settings
+        }),
+        storedBooksPageGenerator = new StoredBooksPageGenerator({
+            bookReferenceManager: bookReferenceManager,
+            fsBookReferenceManager: fsBookReferenceManager,
+            ui_state: ui_state
+        }),
+        settingsPageGenerator = new SettingsPageGenerator({
+            settings: settings,
+            deviceStoragesManager: deviceStoragesManager
+        });
+
+    bookReferenceManager.registerStorageManager(bookStorageManager);
+    bookReferenceValidator.registerEvents(lf_getDeviceStorage());
+    bookReferenceValidator.validateMetadata(function (invalid_paths) {
+        console.log(invalid_paths);
+        alert('Warning: the following files were not retrieved ' + invalid_paths.join(', '));
+        storedBooksPageGenerator.refreshList();
+    });
+    fsBookReferenceManager.findAllChapters();
+    storedBooksPageGenerator.registerEvents({
+        list: '#stored-books-list',
+        page: '#storedBooks',
+        book_actions_popup: '#bookActionsMenu',
+        create_lfa_folder_dialog: '#create_folder_dialog'
+    });
+    storedChaptersPageGenerator.registerEvents({
+        header_title: '.chapter-title',
+        list: '#stored-chapters-list',
+        page: '#storedChapters',
+        book_actions_popup: '#chapterActionsMenu'
+    });
+    bookPlayerPageGenerator.registerEvents({page: '#book-player'});
+    settingsPageGenerator.registerEvents({
+        page: '#mainSettings',
+        folder_path_form: '#user-folder-form'
+    });
+
+    $(document).on("pageshow", "#homeFileManager", function () {
+        $('#deleteAll').click(function () {
+            fileManager.deleteAllAppFiles();
+            localStorage.clear(); // remove references
+        });
+        fileManager.displayAppFiles();
+    });
 }

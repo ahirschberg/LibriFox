@@ -38,3 +38,56 @@ var WEB_RESP = {
 };
 
 var BOOK_OBJECT = new Book({json: WEB_RESP.book_json});
+
+var createFakeAsyncStorage = function () {
+    var fake_store = {},
+        callbacks = [],
+        instant = false;
+    return {
+        getItem: function (key, callback) {
+            var func = function () {
+                callback(fake_store[key] || null);
+            };
+            
+            if (instant) {
+                func();
+            } else {
+                callbacks.push(func);
+            }
+        },
+        setItem: function (key, value) {
+            fake_store[key] = value;
+        },
+        removeItem: function (key, callback) {
+            delete fake_store[key];
+            callback && callback();
+        },
+        length: function (callback) { // called synchronously in mock implementation
+            callback(Object.keys(fake_store).length);
+        },
+        key: function (index, callback) {
+            var func = function () {
+                callback(Object.keys(fake_store)[index]);
+            };
+            
+            if (instant) {
+                func();
+            } else {
+                callbacks.push(func);
+            }
+        },
+        _set_instant: function () { // sets callbacks to eval instantaneously
+            instant = true;
+        },
+        _call_pending_callbacks: function () {
+            callbacks.forEach(function (callback) {
+                callback();
+            });
+            callbacks = [];
+        },
+        _reset_store: function (obj_arr) {
+            instant = false;
+            fake_store = obj_arr || [];
+        }
+    };
+};

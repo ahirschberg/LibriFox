@@ -4,7 +4,9 @@ describe('FilesystemBookReferenceManager()', function () {
         var fbrm,
             fileManager,
             fileManagerSpy,
+            settings,
             id3stub,
+            
             id3_sample_tags = [ // via LibriVox.org chapter downloads
                 {
                     "title": "\u0000Bk1 Ch02\u0000 - The Mail\u0000", // added additional \u0000 characters
@@ -94,9 +96,6 @@ describe('FilesystemBookReferenceManager()', function () {
                 }
             };
             fileManagerSpy = sinon.spy(fileManager, 'enumerateFiles');
-            fbrm = new FilesystemBookReferenceManager({
-                fileManager: fileManager
-            });
             
             var index = -1;
             id3stub = sinon.stub(window, 'id3', function (result, fn) {
@@ -105,6 +104,20 @@ describe('FilesystemBookReferenceManager()', function () {
                 }, 4);
             });
             
+            settings = {
+                getAsync: function (key, callback) {
+                    if (key === 'user_folder') {
+                        callback('USER_FOLDER_STRING');
+                    } else {
+                        throw 'Unrecognized key';
+                    }
+                }
+            }
+            
+            fbrm = new FilesystemBookReferenceManager({
+                fileManager: fileManager,
+                settings: settings
+            });
         });
         afterEach(function () {
             id3stub.restore();
@@ -112,7 +125,8 @@ describe('FilesystemBookReferenceManager()', function () {
         it('matches only .lfa files', function () {
             var donothing_fileManager = { enumerateFiles: function () {} }
             var fbrm_noaction = new FilesystemBookReferenceManager({
-                fileManager: donothing_fileManager
+                fileManager: donothing_fileManager,
+                settings: settings
             });
             var spy = sinon.spy(donothing_fileManager, 'enumerateFiles');
             fbrm_noaction.findAllChapters();
