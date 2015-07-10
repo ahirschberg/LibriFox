@@ -1,19 +1,19 @@
 describe('BookStorageManager()', function () {
     var bsm,
-        storageDevice,
+        fileManager,
         storageMock,
         referenceMgrSpy,
         request;
 
     before(function () {
-        storageDevice = {
-            addNamed: function (blob, path) {
+        fileManager = {
+            addFile: function (blob, path) {
                 return request;
             }
         };
         var deviceStoragesManager = {
             getDownloadsDevice: function () {
-                return storageDevice;
+                return fileManager;
             }
         };
         var referenceMgrStub = {
@@ -27,14 +27,14 @@ describe('BookStorageManager()', function () {
     });
 
     beforeEach(function () {
-        storageMock = sinon.mock(storageDevice);
+        storageMock = sinon.mock(fileManager);
         request = {};
         referenceMgrSpy.reset();
     });
 
     describe('#writeChapter()', function () {
         it('should generate chapter path via #getChapterFilePath and write to file system', function () {
-            storageMock.expects('addNamed').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/1234/0.lfa');
+            storageMock.expects('addFile').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/1234/0.lfa');
             bsm.writeChapter(WEB_RESP.audio_blob, BOOK_OBJECT, CHAPTER_OBJECT);
             storageMock.verify();
         });
@@ -52,7 +52,7 @@ describe('BookStorageManager()', function () {
     });
     describe('#write()', function () {
         it('should write the specified object to the filesystem', function () {
-            storageMock.expects('addNamed').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/1234/01.lfa');
+            storageMock.expects('addFile').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/1234/01.lfa');
             bsm.write(WEB_RESP.audio_blob, 'librifox/1234/01.lfa');
             storageMock.verify();
         });

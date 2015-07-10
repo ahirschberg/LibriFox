@@ -68,7 +68,8 @@ var appUIState = new UIState({
 });
 
 function ChaptersListPageGenerator(args) {
-    var httpRequestHandler = args.httpRequestHandler,
+    var that = this,
+        httpRequestHandler = args.httpRequestHandler,
         list_selector = args.list_selector,
         header_selector = args.header_selector,
         bookDownloadManager = args.bookDownloadManager,
@@ -86,6 +87,17 @@ function ChaptersListPageGenerator(args) {
                 showLocalChapters(book);
             });
         }
+    };
+    
+    this.registerEvents = function (selectors) {
+        $(document).on("pagecreate", selectors.page, function (event) {
+            var selectedBook = appUIState.currentBook;
+            if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
+                console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
+                return false;
+            }
+            that.generatePage(selectedBook);
+        });
     };
 
     function showLocalChapters(book) {
@@ -154,7 +166,8 @@ function ChaptersListPageGenerator(args) {
 function BookDownloadManager(args) {
     var that = this,
         httpRequestHandler = args.httpRequestHandler,
-        storageManager = args.storageManager;
+        storageManager = args.storageManager,
+        fileManager = args.fileManager;
 
     function downloadFile(url, finished_callback, progress_callback) {
         var req_progress_callback;
@@ -165,7 +178,7 @@ function BookDownloadManager(args) {
                 progress_callback.apply(this, arguments)
             };
         }
-
+        
         httpRequestHandler.getBlob(
             url,
             function (xhr) {
@@ -175,24 +188,28 @@ function BookDownloadManager(args) {
     }
 
     this.downloadChapter = function (book_obj, chapter_obj, progress_callback) {
-        downloadFile(
-            chapter_obj.url,
-            function (response) {
-                storageManager.writeChapter(response, book_obj, chapter_obj);
-            },
-            progress_callback
+        // assumes that #writeChapter will always write following this pattern, which could cause problems
+        var filepath = storageManager.getChapterFilePath(book_obj.id, chapter_obj.index);
+        fileManager.tryWriteFile(
+            filepath,
+            function (writeable, request) {
+                if (writeable) {
+                    downloadFile(
+                        chapter_obj.url,
+                        function (response) {
+                            storageManager.writeChapter(response, book_obj, chapter_obj);
+                        },
+                        progress_callback
+                    );
+                } else {
+                    console.warn('tried and failed to write to path ' + filepath + ' with error',
+                                 request.error);
+                    alert('Error: could not write to file. ' + request.error.name);
+                }
+            }
         );
     }
 }
-
-$(document).on("pagecreate", "#chaptersListPage", function (event) {
-    var selectedBook = appUIState.currentBook;
-    if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
-        console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
-        return false;
-    }
-    chaptersListGen.generatePage(selectedBook);
-});
 
 var lf_getDeviceStorage = function (storage_str) {
     return navigator.getDeviceStorage && navigator.getDeviceStorage(storage_str || 'sdcard');
@@ -213,7 +230,7 @@ function BookStorageManager(args) {
 
     this.write = function (blob, path, success_fn) {
         console.log('writing:', blob, path);
-        var request = deviceStoragesManager.getDownloadsDevice().addNamed(blob, path);
+        var request = deviceStoragesManager.getDownloadsDevice().addFile(blob, path);
         if (request) {
             request.onsuccess = function () {
                 console.log('wrote: ' + this.result);
@@ -509,11 +526,6 @@ function FilesystemBookReferenceManager(args) {
             });
         });
     };
-    
-/*    this.createFolder = function (path) {
-        var path = path.replace(/\/*$/, ''); // remove trailing / characters
-        fileManager.addFile(new Blob([''], {type: "text/plain"}), path + '/.empty');
-    };*/
     
     this.setCallback = function (each_book) {
         books.eachReference(function (book) { // in case books are parsed before callback is set
@@ -824,9 +836,8 @@ function SettingsManager (args) {
     };
     this.get = function (key) {
         if (!settings) {
-            console.error(
-                'Looks like you tried to load settings before ' +
-                'they were retrieved. Use getAsync instead!');
+            throw 'Looks like you tried to load settings before ' +
+                'they were retrieved. Use getAsync instead!';
         }
         return settings[key];
     };
@@ -895,7 +906,7 @@ function DeviceStoragesManager(args) {
     };
     
     this.getDownloadsDevice = function () {
-        return nav.getDeviceStorages('sdcard')[downloads_storage_index];
+        return new FileManager(nav.getDeviceStorages('sdcard')[downloads_storage_index]);
     };
     
     this.eachDevice = function (func_each) {
@@ -966,9 +977,20 @@ function FileManager(storage_device) {
         }
         
     };
+    
+    this.tryWriteFile = function (path, result_callback) {
+        var req = that.addFile(new Blob([''], {'type': 'text/plain'}), path);
+        req.onsuccess = function () {
+            storage_device.delete(path);
+            result_callback(true, this);
+        }
+        req.onerror = function () {
+            result_callback(false, this);
+        }
+    };
 
     this.addFile = function (blob, filepath) {
-        storage_device.addNamed(blob, filepath);
+        return storage_device.addNamed(blob, filepath);
     };
     
     this.deleteAllAppFiles = function () {
@@ -994,7 +1016,7 @@ function FileManager(storage_device) {
     }
 }
 
-function SearchResltsPageGenerator(args) {
+function SearchResultsPageGenerator(args) {
     var httpRequestHandler = args.httpRequestHandler,
         results_selector = args.results_selector,
         field,
@@ -1051,9 +1073,16 @@ function SearchResltsPageGenerator(args) {
     }
 
     function getSearchJSON(search_string, callback_func) {
-        httpRequestHandler.getJSON(generateBookUrl(search_string, field), function (xhr) {
-            callback_func(xhr.response.books);
-        });
+        httpRequestHandler.getJSON(
+            generateBookUrl(search_string, field),
+            function (xhr) {
+                callback_func(xhr.response.books);
+            },
+            {
+                error_callback: function () {
+                    alert('Error loading search results.');
+                }
+            });
     }
 
     function generateBookUrl(search_string, field) {
@@ -1072,17 +1101,6 @@ function SearchResltsPageGenerator(args) {
         return "https://librivox.org/api/feed/audiobooks/" + sanitized_field + "/^" + encodeURIComponent(search_string) + "?&format=json";
     }
 }
-var searchResultsPageGenerator =
-    new SearchResltsPageGenerator({
-        httpRequestHandler: httpRequestHandler,
-        results_selector: '#results-listing'
-    });
-searchResultsPageGenerator.registerEvents({
-    page: "#bookSearch",
-    form: "#search-form",
-    search: "#books-search-bar",
-    settings_popup: '#search-settings'
-});
 
 function HttpRequestHandler() {
     var that = this;
@@ -1141,6 +1159,7 @@ function createApp () {
     var settings = new SettingsManager({
             asyncStorage: asyncStorage
         }),
+        fileManager = new FileManager(lf_getDeviceStorage()),
         deviceStoragesManager = new DeviceStoragesManager({
             settings: settings    
         }),
@@ -1155,7 +1174,11 @@ function createApp () {
         bookDownloadManager = new BookDownloadManager({
             httpRequestHandler: httpRequestHandler,
             storageManager: bookStorageManager,
-            referenceManager: bookReferenceManager
+            fileManager: fileManager
+        }),
+        searchResultsPageGenerator = new SearchResultsPageGenerator({
+            httpRequestHandler: httpRequestHandler,
+            results_selector: '#results-listing'
         }),
         chaptersListGen = new ChaptersListPageGenerator({
             'httpRequestHandler': httpRequestHandler,
@@ -1163,7 +1186,6 @@ function createApp () {
             'header_selector': '#chapterHeader',
             'bookDownloadManager': bookDownloadManager
         }),
-        fileManager = new FileManager(lf_getDeviceStorage()),
         bookReferenceValidator = new BookReferenceValidator({
             referenceManager: bookReferenceManager,
             fileManager: fileManager
@@ -1214,6 +1236,15 @@ function createApp () {
         book_actions_popup: '#chapterActionsMenu'
     });
     bookPlayerPageGenerator.registerEvents({page: '#book-player'});
+    searchResultsPageGenerator.registerEvents({
+        page: "#bookSearch",
+        form: "#search-form",
+        search: "#books-search-bar",
+        settings_popup: '#search-settings'
+    });
+    chaptersListGen.registerEvents({
+        page: '#chaptersListPage'
+    });
     settingsPageGenerator.registerEvents({
         page: '#mainSettings',
         folder_path_form: '#user-folder-form'
@@ -1222,7 +1253,7 @@ function createApp () {
     $(document).on("pageshow", "#homeFileManager", function () {
         $('#deleteAll').click(function () {
             fileManager.deleteAllAppFiles();
-            localStorage.clear(); // remove references
+            asyncStorage.clear(); // remove references
         });
         fileManager.displayAppFiles();
     });

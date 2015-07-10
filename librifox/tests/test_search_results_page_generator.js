@@ -1,4 +1,4 @@
-describe('SearchResltsPageGenerator()', function () {
+describe('SearchResultsPageGenerator()', function () {
     describe('#generatePage()', function () {
         var spg,
             bsrSelector,
@@ -37,7 +37,7 @@ describe('SearchResltsPageGenerator()', function () {
                 }
             }
 
-            spg = new SearchResltsPageGenerator({
+            spg = new SearchResultsPageGenerator({
                 'httpRequestHandler': new StubHttpRequestHandler(),
                 'results_selector': bsrSelector
             });
