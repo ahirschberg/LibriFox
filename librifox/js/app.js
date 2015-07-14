@@ -274,7 +274,7 @@ function BookReferenceManager(args) {
         if (!isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
-        that.loadJSONReference(book_obj.id, function (obj) {
+        function onload_reference (obj) {
             var obj = obj || {};
             obj.title = obj.title || book_obj.title;
             obj.id    = obj.id    || book_obj.id;
@@ -286,10 +286,18 @@ function BookReferenceManager(args) {
                 path: path,
                 name: chapter_obj.name
             };
-            async_storage.setItem(JSON_PREFIX + book_obj.id, obj);
+            async_storage.setItem(JSON_PREFIX + book_obj.id, obj, function () {
+                console.log('wrote to asyncStorage:', obj);
+            });
             applyHelperFunctions(obj);
             obj_storage[JSON_PREFIX + book_obj.id] = obj;
-        });
+        };
+        var already_loaded_ref = obj_storage[JSON_PREFIX + book_obj.id]
+        if (already_loaded_ref) {
+            onload_reference(already_loaded_ref);
+        } else {
+            that.loadJSONReference(book_obj.id, onload_reference);
+        }
     };
 
     this.loadJSONReference = function (book_id, load_callback, prefix) {
@@ -866,17 +874,24 @@ function SettingsPageGenerator(args) {
                 return false;
             });
             
+            var selected_storage_index = deviceStoragesManager.getDownloadsDeviceIndex();
             deviceStoragesManager.eachDevice(function (storage, index) {
-                $('#sdcard-picker').append(
-                    $('<li/>')
-                        .html( $('<a/>')
-                            .text('sdcard' + index)
-                            .click(function () {
-                                deviceStoragesManager.setDownloadsDeviceByIndex(index);
-                            })
-                        )
-                    );
-                $('#sdcard-picker').listview('refresh');
+                var $radio = $('<input type="radio" name="radio-choice"/>')
+                    .attr('id', 'sdcard-radio-choice-' + index)
+                    .click(function () {
+                        deviceStoragesManager.setDownloadsDeviceByIndex(index);
+                    });
+                if (index === selected_storage_index) {
+                    $radio.attr('checked', 'checked');
+                }
+                $radio.appendTo('#sdcard-picker');
+                
+                $('<label/>')
+                    .attr('for', 'sdcard-radio-choice-' + index)
+                    .text('sdcard' + index)
+                    .appendTo('#sdcard-picker');
+                
+                $('#sdcard-picker').trigger('create'); // functions as a refresh?
             });
         });
     };
@@ -902,6 +917,10 @@ function DeviceStoragesManager(args) {
     
     this.getDownloadsDevice = function () { // TODO check performance implications of this / refactor
         return new FileManager(nav.getDeviceStorages('sdcard')[downloads_storage_index]);
+    };
+    
+    this.getDownloadsDeviceIndex = function () {
+        return downloads_storage_index;
     };
     
     this.getSDCard = function () {
