@@ -101,22 +101,28 @@ function ChaptersListPageGenerator(args) {
     };
 
     function showLocalChapters(book) {
-        var $dl_all = $('<li/>', {
+        /*var $dl_all = $('<li/>', {
             html: $('<a/>', {
                 text: 'Download all chapters (WIP)'
             }),
             click: function () {
                 var that = this;
                 $(that).unbind('click');
+                
+                //temp
+                var i = 0;
                 book.chapters.forEach(function (chapter) {
-                    var chapter_list_element = $('[chapter-index="' + chapter.index + '"]');
-                    downloadChapterWithCbk(book, chapter, chapter_list_element);
+                    if ( i < 4 ) {
+                        var chapter_list_element = $('[chapter-index="' + chapter.index + '"]');
+                        downloadChapterWithCbk(book, chapter, chapter_list_element);
+                    }
+                    i++;
                 });
             }
         }).attr('data-icon', 'arrow-d');
         $dl_all.append(PROGRESSBAR_HTML);
         
-        $(list_selector).append($dl_all);
+        $(list_selector).append($dl_all);*/
         $.each(book.chapters, function (index, chapter) {
             generateChapterListItem(book, chapter, this);
         });
