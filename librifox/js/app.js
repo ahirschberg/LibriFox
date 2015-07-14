@@ -93,7 +93,6 @@ function ChaptersListPageGenerator(args) {
         showFooterAlert({book_id: book.id});
     };
     
-    
     function showFooterAlert(args) {
         var book_id = args.book_id,
             book_ref = args.book_ref,
@@ -806,8 +805,18 @@ function StoredChaptersPageGenerator(args) {
     }
 }
 
+function Player(args) {
+    var audio_element,
+        curr_book;
+    
+    this.playBook = function (obj, index) {
+        
+    }
+}
+
 function BookPlayerPageGenerator(args) {
     var ui_state = args.ui_state,
+        fileManager = args.fileManager,
         that = this;
 
     this.generatePage = function (audio_url, chapter_name) {
@@ -823,19 +832,16 @@ function BookPlayerPageGenerator(args) {
                 console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
                 return false;
             }
-            var sdcard = lf_getDeviceStorage();
-            var request = sdcard.get(ui_state.chapter_ref.path);
-            request.onsuccess = function () {
-                var file = this.result;
-                console.log('loaded file from ' + file.name);
-                var file_url = ui_state.file_url = URL.createObjectURL(file);
-                console.log(file_url);
-                that.generatePage(file_url, ui_state.chapter_ref.name);
-            };
-            request.onerror = function () {
-                console.log('Error loading from ' + ui_state.chapter_ref.path, this.error);
-                alert('Error loading file ' + ui_state.chapter_ref.path + ': ' + this.error.name);
-            };
+            fileManager.getFileFromPath(
+                ui_state.chapter_ref.path, 
+                function (file) {
+                    var file_url = ui_state.file_url = URL.createObjectURL(file);
+                    console.log(file_url);
+                    that.generatePage(file_url, ui_state.chapter_ref.name);
+                }, function () {
+                    alert('Error loading file ' + ui_state.chapter_ref.path + ': ' + this.error.name);
+                }
+            );
         });
         $(document).on('pagebeforehide', selectors.page, function (event) {
             console.log('pagehide called - revoking url for ' + ui_state.file_url);
@@ -1084,6 +1090,19 @@ function FileManager(storage_device) {
             }
         });
     }
+    
+    this.getFileFromPath = function (path, success, error) {
+        var request = storage_device.get(path);
+        request.onsuccess = function () {
+            var file = this.result;
+            console.log('loaded file from ' + file.name);
+            success(file)
+        };
+        request.onerror = function () {
+            console.log('Error loading from ' + path, this.error);
+            error && error(this);
+        };
+    }
 }
 
 function SearchResultsPageGenerator(args) {
@@ -1255,7 +1274,8 @@ function createApp () {
                 audio: '#audioSource',
                 header: '.book-player-header'
             },
-            ui_state: ui_state
+            ui_state: ui_state,
+            fileManager: fileManager
         }),
         searchResultsPageGenerator = new SearchResultsPageGenerator({
             httpRequestHandler: httpRequestHandler,
