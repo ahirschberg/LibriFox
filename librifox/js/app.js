@@ -244,7 +244,7 @@ function BookStorageManager(args) {
     };
     
     this.delete = function (path, success_fn, error_fn) {
-        var request = storageDevice.delete(path);
+        var request = deviceStoragesManager.getSDCard().delete(path);
         request.onsuccess = function () {
             console.log("File deleted: " + path);
             success_fn && success_fn();
@@ -441,8 +441,7 @@ function BookReferenceValidator(args) {
     var fileManager = args.fileManager,
         referenceManager = args.referenceManager;
     
-    this.registerEvents = function (storage_device) { // NOT WORKING
-        //console.log('registerEvents called with storage', storage_device);
+    this.registerEvents = function (storage_device) {
         storage_device.addEventListener("change", function (event) {
             console.log('The file "' + event.path + '" has been ' + event.reason);
         });
@@ -901,9 +900,13 @@ function DeviceStoragesManager(args) {
         }
     };
     
-    this.getDownloadsDevice = function () {
+    this.getDownloadsDevice = function () { // TODO check performance implications of this / refactor
         return new FileManager(nav.getDeviceStorages('sdcard')[downloads_storage_index]);
     };
+    
+    this.getSDCard = function () {
+        return navigator.getDeviceStorage('sdcard');
+    }
     
     this.eachDevice = function (func_each) {
         nav.getDeviceStorages('sdcard').forEach(func_each);
