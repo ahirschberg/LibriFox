@@ -70,15 +70,17 @@ var appUIState = new UIState({
 function ChaptersListPageGenerator(args) {
     var that = this,
         httpRequestHandler = args.httpRequestHandler,
-        list_selector = args.list_selector,
-        header_selector = args.header_selector,
+        selectors = args.selectors,
         bookDownloadManager = args.bookDownloadManager,
+        bookReferenceManager = args.bookReferenceManager,
+        storedBookUiState = args.storedBookUiState,
         PROGRESSBAR_HTML =  '<div class="progressBar" style="display: none">' +
                             '<div class="progressBarSlider"></div></div>';
 
     this.generatePage = function (book) {
-        $(header_selector).text(book.title); // untested, TODO update tests
-
+        $(selectors.book_title).text(book.title);
+        $(selectors.book_description).text(book.description);
+        
         if (book.chapters) {
             showLocalChapters(book);
         } else {
@@ -87,9 +89,45 @@ function ChaptersListPageGenerator(args) {
                 showLocalChapters(book);
             });
         }
+        
+        showFooterAlert({book_id: book.id});
     };
     
-    this.registerEvents = function (selectors) {
+    
+    function showFooterAlert(args) {
+        var book_id = args.book_id,
+            book_ref = args.book_ref,
+            show_footer = function (book_ref) {
+                $(selectors.footer_alert)
+                    .click(function () {
+                        storedBookUiState.book_ref = book_ref;
+                    })
+                    .show({
+                        complete: function () {
+                            var footer_height = $(this).height();
+                            if (footer_height) {
+                                $(selectors.page).css('padding-bottom', footer_height + 'px');
+                            }
+                        }
+                    });
+            };
+        
+        if ($(selectors.footer_alert).css('display') === 'none') {
+            if (book_ref) {
+                show_footer(book_ref);
+            } else {
+            bookReferenceManager.loadJSONReference(book_id, function (obj) {
+                if (obj) {
+                    show_footer(obj);
+                }
+            });
+            }
+        } else {
+            console.log('showFooterAlert called, but the footer was already showing.  Doing nothing');
+        }
+    }
+    
+    this.registerEvents = function () {
         $(document).on("pagecreate", selectors.page, function (event) {
             var selectedBook = appUIState.currentBook;
             if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
@@ -101,6 +139,7 @@ function ChaptersListPageGenerator(args) {
     };
 
     function showLocalChapters(book) {
+        // Removed until there is a solution for the async storage problem
         /*var $dl_all = $('<li/>', {
             html: $('<a/>', {
                 text: 'Download all chapters (WIP)'
@@ -122,11 +161,11 @@ function ChaptersListPageGenerator(args) {
         }).attr('data-icon', 'arrow-d');
         $dl_all.append(PROGRESSBAR_HTML);
         
-        $(list_selector).append($dl_all);*/
+        $(selectors.list).append($dl_all);*/
         $.each(book.chapters, function (index, chapter) {
             generateChapterListItem(book, chapter, this);
         });
-        $(list_selector).listview('refresh');
+        $(selectors.list).listview('refresh');
     };
 
     function generateChapterListItem(book, chapter) {
@@ -143,7 +182,7 @@ function ChaptersListPageGenerator(args) {
         $chapterListItem.click(function () {
             downloadChapterWithCbk(book, chapter, this);
         });
-        $(list_selector).append($chapterListItem);
+        $(selectors.list).append($chapterListItem);
     }
     
     function downloadChapterWithCbk(book, chapter, that) {
@@ -157,6 +196,9 @@ function ChaptersListPageGenerator(args) {
                     $(that).find('.progressBar').show();
                     $(that).find('.progressBarSlider').css('width', percentage + '%');
                 }
+            },
+            function (book_ref) {
+                showFooterAlert({book_ref: book_ref});
             });
     }
 
@@ -193,7 +235,7 @@ function BookDownloadManager(args) {
             additional_args);
     }
 
-    this.downloadChapter = function (book_obj, chapter_obj, progress_callback) {
+    this.downloadChapter = function (book_obj, chapter_obj, progress_callback, finished_callback) {
         // assumes that #writeChapter will always write following this pattern, which could cause problems
         var filepath = storageManager.getChapterFilePath(book_obj.id, chapter_obj.index);
         fileManager.tryWriteFile(
@@ -203,7 +245,7 @@ function BookDownloadManager(args) {
                     downloadFile(
                         chapter_obj.url,
                         function (response) {
-                            storageManager.writeChapter(response, book_obj, chapter_obj);
+                            storageManager.writeChapter(response, book_obj, chapter_obj, finished_callback);
                         },
                         progress_callback
                     );
@@ -229,8 +271,9 @@ function BookStorageManager(args) {
     this.writeChapter = function (blob, book_obj, chapter_obj, func_done) {
         var chPath = that.getChapterFilePath(book_obj.id, chapter_obj.index);
         that.write(blob, chPath, function (saved_path) {
-            referenceManager.storeJSONReference(book_obj, chapter_obj, saved_path);
-            func_done && func_done();
+            referenceManager.storeJSONReference(book_obj, chapter_obj, saved_path, {
+                reference_created: func_done
+            });
         });
     };
 
@@ -276,7 +319,8 @@ function BookReferenceManager(args) {
     
     this.obj_storage = obj_storage; // for testing
 
-    this.storeJSONReference = function (book_obj, chapter_obj, path) {
+    this.storeJSONReference = function (book_obj, chapter_obj, path, options) {
+        options = options || {}
         if (!isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
@@ -297,6 +341,8 @@ function BookReferenceManager(args) {
             });
             applyHelperFunctions(obj);
             obj_storage[JSON_PREFIX + book_obj.id] = obj;
+            
+            options.reference_created && options.reference_created(obj);
         };
         var already_loaded_ref = obj_storage[JSON_PREFIX + book_obj.id]
         if (already_loaded_ref) {
@@ -1200,21 +1246,7 @@ function createApp () {
             storageManager: bookStorageManager,
             fileManager: fileManager
         }),
-        searchResultsPageGenerator = new SearchResultsPageGenerator({
-            httpRequestHandler: httpRequestHandler,
-            results_selector: '#results-listing'
-        }),
-        chaptersListGen = new ChaptersListPageGenerator({
-            'httpRequestHandler': httpRequestHandler,
-            'list_selector': '#chaptersList',
-            'header_selector': '#chapterHeader',
-            'bookDownloadManager': bookDownloadManager
-        }),
-        bookReferenceValidator = new BookReferenceValidator({
-            referenceManager: bookReferenceManager,
-            fileManager: fileManager
-        }),
-        ui_state = {},
+        ui_state = {}, // TODO figure out a sane-er/more elegant way to transfer state
         storedChaptersPageGenerator = new StoredChaptersPageGenerator({
             ui_state: ui_state
         }),
@@ -1224,6 +1256,27 @@ function createApp () {
                 header: '.book-player-header'
             },
             ui_state: ui_state
+        }),
+        searchResultsPageGenerator = new SearchResultsPageGenerator({
+            httpRequestHandler: httpRequestHandler,
+            results_selector: '#results-listing'
+        }),
+        chaptersListGen = new ChaptersListPageGenerator({
+            httpRequestHandler: httpRequestHandler,
+            selectors: {
+                page: '#chaptersListPage',
+                list: '#chaptersList',
+                book_title: '.book-title-disp',
+                book_description: '.book-desc-disp',
+                footer_alert: '#player-shortcut-footer'
+            },
+            bookDownloadManager: bookDownloadManager,
+            bookReferenceManager: bookReferenceManager,
+            storedBookUiState: ui_state
+        }),
+        bookReferenceValidator = new BookReferenceValidator({
+            referenceManager: bookReferenceManager,
+            fileManager: fileManager
         }),
         fsBookReferenceManager = new FilesystemBookReferenceManager({
             fileManager: fileManager,
@@ -1266,9 +1319,7 @@ function createApp () {
         search: "#books-search-bar",
         settings_popup: '#search-settings'
     });
-    chaptersListGen.registerEvents({
-        page: '#chaptersListPage'
-    });
+    chaptersListGen.registerEvents();
     settingsPageGenerator.registerEvents({
         page: '#mainSettings',
         folder_path_form: '#user-folder-form'

@@ -51,3 +51,14 @@ li.filesystem_book {
 li.filesystem_book:last-child {
     border-width: 2px 0;
 }
+
+.header-text-no-cutoff {
+    margin: 0 10% !important
+}
+
+.bottom-anchored-notice {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
