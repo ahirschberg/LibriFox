@@ -509,21 +509,23 @@ function FilesystemBookReferenceManager(args) {
 
     this.findAllChapters = function (passed_in_func_each) {
         settings.getAsync('user_folder', function (user_audio_folder) {
-            fileManager.enumerateFiles({
-                enumerate_path: user_audio_folder,
-                match: /.*\.lfa/,
-                func_each: function (result) {
-                    id3(result, function (err, tags) {
-                        var book_result = addBook(tags, result.name);
-                        if (book_result.isNew) {
-                            if (each_book_callback) {
-                                each_book_callback(book_result.book);
+            if (user_audio_folder) {
+                fileManager.enumerateFiles({
+                    enumerate_path: user_audio_folder,
+                    match: /.*\.lfa/,
+                    func_each: function (result) {
+                        id3(result, function (err, tags) {
+                            var book_result = addBook(tags, result.name);
+                            if (book_result.isNew) {
+                                if (each_book_callback) {
+                                    each_book_callback(book_result.book);
+                                }
                             }
-                        }
-                        passed_in_func_each && passed_in_func_each();
-                    });
-                }
-            });
+                            passed_in_func_each && passed_in_func_each();
+                        });
+                    }
+                });
+            }
         });
     };
     
@@ -747,7 +749,7 @@ function StoredChaptersPageGenerator(args) {
 
 function BookPlayerPageGenerator(args) {
     var ui_state = args.ui_state,
-        page;
+        that = this;
 
     this.generatePage = function (audio_url, chapter_name) {
         //alert('generated page with audio_url ' + audio_url + ' and chapter_name ' + chapter_name);
@@ -756,7 +758,7 @@ function BookPlayerPageGenerator(args) {
     };
 
     this.registerEvents = function (selectors) {
-        page = selectors.page;
+        var page = selectors.page;
         $(document).on("pagecreate", selectors.page, function (event) {
             if (!ui_state.chapter_ref) {
                 console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
@@ -768,7 +770,8 @@ function BookPlayerPageGenerator(args) {
                 var file = this.result;
                 console.log('loaded file from ' + file.name);
                 var file_url = ui_state.file_url = URL.createObjectURL(file);
-                bookPlayerPageGenerator.generatePage(file_url, ui_state.chapter_ref.name);
+                console.log(file_url);
+                that.generatePage(file_url, ui_state.chapter_ref.name);
             };
             request.onerror = function () {
                 console.log('Error loading from ' + ui_state.chapter_ref.path, this.error);
@@ -778,13 +781,6 @@ function BookPlayerPageGenerator(args) {
         $(document).on('pagebeforehide', selectors.page, function (event) {
             console.log('pagehide called - revoking url for ' + ui_state.file_url);
             URL.revokeObjectURL(ui_state.file_url);
-            
-            /* 
-             * Fix for filesystem issue.
-             * Issue only affects 2.0 simulator - 2.0 hardware and 2.2 simulator are unaffected.
-             * Should I leave this in?
-             */
-            $(args.selectors.audio).prop("src", '');
         });
     };
 }
@@ -800,10 +796,13 @@ function SettingsManager (args) {
         var already_loading = false,
             callbacks = [];
         return function (load_callback) {
-            if (!settings) {
+            if (!settings) { // all callbacks will be executed when settings loads
                 callbacks.push(load_callback);
             }
-            if (!already_loading) {
+            
+            // if a load is not in progress, start one
+            // if a load is already in progress, do nothing
+            if (!already_loading) { 
                 already_loading = true;
                 async_storage.getItem(st_settings_key, function (obj) {
                     var obj = obj || generateDefaultSettings();
@@ -812,7 +811,7 @@ function SettingsManager (args) {
                         cbk && cbk(obj);
                     });
                 });
-            } else if (settings) {
+            } else if (settings) { // if load has completed, execute callback
                 console.log('loadSettings was called, but settings was already loaded');
                 load_callback(settings);
             }
@@ -822,10 +821,7 @@ function SettingsManager (args) {
     loadSettings();
     
     function generateDefaultSettings () {
-        return { // should I bother showing what keys will be used here?
-            user_folder: undefined,
-            downloads_storage_device_index: undefined
-        };
+        return {};
     }
     
     this.set = function (key, value) {
@@ -1258,3 +1254,9 @@ function createApp () {
         fileManager.displayAppFiles();
     });
 }
+
+/*var db = new MediaDB("sdcard", undefined);
+db.addEventListener('ready', function () {
+    db.enumerate(debug_print_cbk);
+});
+*/
