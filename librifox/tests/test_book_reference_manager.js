@@ -1,45 +1,23 @@
 describe('BookReferenceManager()', function () {
     "use strict";
-    var store,
+    var async_storage,
         ls_proto,
         brm,
         storageMgr_delete_spy;
-
+    
     before(function () {
-        ls_proto = {
-            getItem: function (key) {
-                return store[key] || null; // the store scope here is just icky
-            },
-            setItem: function (key, str) {
-                store[key] = str;
-            },
-            removeItem: function (key) {
-                delete store[key];
-            }
-        };
+        async_storage = createFakeAsyncStorage();
     });
     
-    function clearStorage() {
-        Object.keys(store).forEach(function (key) {
-            delete store[key];
-        });
-    }
     beforeEach(function () {
+        async_storage._reset_store();
         var mockStorageManager = {
             delete: function (path, success, fail) {
                 success();
             }
         }
         storageMgr_delete_spy = sinon.spy(mockStorageManager, 'delete');
-
-        // regenerate store and storageMock for each test
-        store = Object.create(ls_proto);
-        brm = new BookReferenceManager({
-            localStorage: store,
-            storageManager: mockStorageManager
-        });
-
-        store[brm.JSON_PREFIX + 9999] = JSON.stringify({
+        async_storage.setItem('bookid_9999', {
             0: {
                 path: 'path1/to',
                 name: 'Introduction'
@@ -47,26 +25,40 @@ describe('BookReferenceManager()', function () {
             title: BOOK_OBJECT.title,
             id: 9999
         });
+        
+        brm = new BookReferenceManager({
+            asyncStorage: async_storage,
+            storageManager: mockStorageManager
+        });
     });
 
     describe('#loadJSONReference()', function () {
-        it('loads book_reference from local_storage', function () {
-            var book_ref = brm.loadJSONReference(9999);
-            expect(book_ref).to.have.property(0);
+        it('loads book_reference from local_storage', function (done) {
+            brm.loadJSONReference(9999, function (book_ref) {
+                expect(book_ref).to.have.property(0);
+                expect(book_ref).to.have.property('title', BOOK_OBJECT.title);
+                done();
+            });
+            async_storage._call_pending_callbacks();
+        });
+        it('adds helper functions to object', function (done) {
+            brm.loadJSONReference(9999, function (book_ref) {
+                expect(book_ref).property('eachChapter').to.be.a('function');
+                done();
+            });
+            async_storage._call_pending_callbacks();
+        });
+        it('adds reference to obj_storage', function (done) {
+            brm.loadJSONReference(9999, function () {
+                expect(brm.obj_storage).to.have.property('bookid_9999');
+                done();
+            });
+            async_storage._call_pending_callbacks();
 
-            expect(book_ref).to.have.property('title', BOOK_OBJECT.title);
-        });
-        it('adds helper functions to object', function () {
-            var book_ref = brm.loadJSONReference(9999);
-            expect(book_ref).property('eachChapter').to.be.a('function');
-        });
-        it('adds reference to obj_storage', function () {
-            var book_ref = brm.loadJSONReference(9999);
-            expect(brm.obj_storage).to.have.property('bookid_9999');
         });
     });
     describe('#storeJSONReference', function () {
-        it('writes to localstorage', function () {
+        it('writes to async storage', function (done) {
             var fake_path = 'path/to/file',
                 mock_book = {
                     id: 1111
@@ -77,11 +69,15 @@ describe('BookReferenceManager()', function () {
                 }
 
             brm.storeJSONReference(mock_book, mock_chapter, fake_path);
-            var ch1_ref = brm.loadJSONReference(1111)[1];
-            expect(ch1_ref).to.have.property('path', fake_path);
-            expect(ch1_ref).to.have.property('name', 'Chapter 1');
+            brm.loadJSONReference(1111, function (book_ref) {
+                var ch1_ref = book_ref[1];
+                expect(ch1_ref).to.have.property('path', fake_path);
+                expect(ch1_ref).to.have.property('name', 'Chapter 1');
+                done();
+            });
+            async_storage._call_pending_callbacks();
         });
-        it('adds a title property if the entry doesn\'t already exist', function () {
+        it('adds a title property if the entry doesn\'t already exist', function (done) {
             var fake_ch_index = 1,
                 mock_book = {
                     id: 1111,
@@ -89,9 +85,13 @@ describe('BookReferenceManager()', function () {
                 };
 
             brm.storeJSONReference(mock_book, CHAPTER_OBJECT, 'path/to/file');
-            expect(brm.loadJSONReference(1111)).to.have.property('title', mock_book.title);
+            brm.loadJSONReference(1111, function (book_ref) {
+                expect(book_ref).to.have.property('title', mock_book.title);
+                done();
+            });
+            async_storage._call_pending_callbacks();
         });
-        it('appends new keys if object already exists', function () {
+        it('appends new keys if object already exists', function (done) {
             var mock_book = {
                 id: 9999
             };
@@ -100,29 +100,35 @@ describe('BookReferenceManager()', function () {
                 name: 'Chapter 1'
             }
             brm.storeJSONReference(mock_book, mock_chapter, 'path2/to');
-            var stored = brm.loadJSONReference(9999);
-            expect(stored[0]).to.be.a('object');
-            expect(stored[1]).to.be.a('object');
+            brm.loadJSONReference(9999, function (stored) {
+                expect(stored[0]).to.be.a('object');
+                expect(stored[1]).to.be.a('object');
+                done();
+            });
+            async_storage._call_pending_callbacks();
         });
-        it('stores indexed chapter references', function () {
+        it('stores indexed chapter references', function (done) {
 
-            var book_ref = brm.loadJSONReference(9999),
-                ch0_ref = book_ref[0];
-            expect(ch0_ref).to.have.property('path', 'path1/to');
-            expect(ch0_ref).to.have.property('name', 'Introduction');
+            brm.loadJSONReference(9999, function (book_ref) {
+                var ch0_ref = book_ref[0];
+                expect(ch0_ref).to.have.property('path', 'path1/to');
+                expect(ch0_ref).to.have.property('name', 'Introduction');
+                done();
+            });
+            async_storage._call_pending_callbacks();
         });
     });
     describe('#eachReference()', function () {
-        it('takes a function and passes it each book key in local_storage', function () {
-            store['abcdef'] = {
+        it('takes a function and passes it each book key in async storage', function () {
+            async_storage._set_instant();
+            async_storage.setItem('abcdef', {
                 0: {
                     path: 'bad'
                 }
-            };
+            });
             brm.storeJSONReference(BOOK_OBJECT, CHAPTER_OBJECT, 'this/is/path');
 
             var result = [];
-            console.log(ls_proto.getItem('abcdef'));
             brm.eachReference(function (obj) {
                 result.push(obj[0].path);
             });
@@ -131,15 +137,18 @@ describe('BookReferenceManager()', function () {
             expect(result).to.contain('this/is/path');
             expect(result).not.to.contain('bad');
         });
-        it('objects have helper functions', function () {
+        it('objects have helper functions', function (done) {
+            async_storage._set_instant();
             brm.eachReference(function (obj) {
                 expect(obj).property('eachChapter').to.be.a('function');
+                done();
             });
         });
     });
     describe('#everyChapter()', function () {
         it('iterates every chapter of every reference', function () {
-            clearStorage();
+            async_storage._set_instant();
+
             var book_obj_1 = {id: 9999},
                 book_obj_2 = {id: 1234};
             brm.storeJSONReference(
@@ -195,7 +204,9 @@ describe('BookReferenceManager()', function () {
     });
     describe('functions of returned book reference', function () {
         describe('#deleteChapter()', function () {
-            it('deletes the chapter with the given index and writes to local_storage', function () {
+            it('deletes the chapter with the given index and writes to local_storage', function (done) {
+                async_storage._set_instant();
+                
                 var mock_book = {
                     id: 9999
                 };
@@ -205,22 +216,30 @@ describe('BookReferenceManager()', function () {
                 }
                 var success_spy = sinon.spy();
                 brm.storeJSONReference(mock_book, mock_chapter, 'path2/to');
-                var book_ref = brm.loadJSONReference(9999);
-                book_ref.deleteChapter(0, success_spy);
+                brm.loadJSONReference(9999, function (book_ref) {
+                    book_ref.deleteChapter(0, success_spy);
 
-                expect(book_ref).not.to.have.property(0);
-                expect(book_ref).property('1').to.be.an('object');
+                    expect(book_ref).not.to.have.property(0);
+                    expect(book_ref).property('1').to.be.an('object');
 
-                expect(success_spy.callCount).to.equal(1);
-                expect(storageMgr_delete_spy.callCount).to.equal(1);
-
-                expect(brm.loadJSONReference(9999)).not.to.have.property(0);
-                expect(brm.loadJSONReference(9999)).property('1').to.be.an('object');
+                    expect(success_spy.callCount).to.equal(1);
+                    expect(storageMgr_delete_spy.callCount).to.equal(1);
+                    brm.loadJSONReference(9999, function (book_ref_copy) {
+                        expect(book_ref_copy).not.to.have.property(0);
+                        expect(book_ref_copy).property('1').to.be.an('object');
+                        done();
+                    });
+                });
             });
-            it('also deletes the book if it is the only chapter', function () {
-                var book_ref = brm.loadJSONReference(9999);
-                book_ref.deleteChapter(0);
-                expect(brm.loadJSONReference(9999)).to.be.a('null');
+            it('also deletes the book if it is the only chapter', function (done) {
+                async_storage._set_instant();
+                brm.loadJSONReference(9999, function (book_ref) {
+                    book_ref.deleteChapter(0);
+                    brm.loadJSONReference(9999, function (book_ref_copy) {
+                        expect(book_ref_copy).to.be.a('null');
+                        done();
+                    });
+                });
             });
         });
         describe('#deleteBook()', function () { // filesystem error case is untested
@@ -235,11 +254,16 @@ describe('BookReferenceManager()', function () {
                 brm.storeJSONReference(mock_book, mock_chapter, 'path2/to');
 
                 var success_spy = sinon.spy();
-                var book_ref = brm.loadJSONReference(9999);
-                book_ref.deleteBook(success_spy);
-                expect(success_spy.callCount).to.equal(1);
-                expect(brm.loadJSONReference(9999)).to.be.a('null');
-                expect(storageMgr_delete_spy.callCount).to.equal(2);
+                brm.loadJSONReference(9999, function (book_ref) {
+                    async_storage._set_instant();
+                    book_ref.deleteBook(success_spy);
+                    brm.loadJSONReference(9999, function (book_ref_copy) {
+                        expect(book_ref_copy).to.be.a('null');
+                    });
+                    
+                    expect(success_spy.callCount).to.equal(1);
+                    expect(storageMgr_delete_spy.callCount).to.equal(2);
+                });
             });
         });
     });

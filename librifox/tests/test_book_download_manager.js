@@ -9,7 +9,12 @@ describe('BookDownloadManager()', function () {
     function newBDM(desired_args) {
         var args = {
             'httpRequestHandler': httpRequestHandler,
-            'storageManager': storageManager
+            'storageManager': storageManager,
+            'fileManager': {
+                tryWriteFile: function (path, callback) {
+                    callback(true);
+                }
+            }
         };
         
         // add or overwrite default properties with supplied args
@@ -30,7 +35,10 @@ describe('BookDownloadManager()', function () {
         blobSpy = sinon.spy(httpRequestHandler, 'getBlob');
 
         storageManager = {
-            writeChapter: function (blob, book_obj, chapter_obj) {} 
+            writeChapter: function (blob, book_obj, chapter_obj) {},
+            getChapterFilePath: function (id, index) {
+                return 'foo/' + id + '/' + index + '.lfa'; 
+            }
         };
         writeChapterSpy = sinon.spy(storageManager, 'writeChapter');
         
