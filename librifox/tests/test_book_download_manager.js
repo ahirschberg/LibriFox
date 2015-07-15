@@ -53,7 +53,7 @@ describe('BookDownloadManager()', function () {
         it('should download the specified chapter', function () {
             bdm.downloadChapter(BOOK_OBJECT, CHAPTER_OBJECT);
             expect(writeChapterSpy.calledOnce).to.be.true;
-            expect(writeChapterSpy.firstCall.calledWithExactly(
+            expect(writeChapterSpy.firstCall.calledWith(
                     testBlob,
                     BOOK_OBJECT,
                     CHAPTER_OBJECT

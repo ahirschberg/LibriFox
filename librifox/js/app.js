@@ -1,6 +1,7 @@
 // helpful for debugging asyncStorage, 
 // a callback that prints its arguments
-var debug_print_cbk = function () { console.log(arguments); };
+var debug_print_cbk = function () { console.log(arguments); },
+    fm_page = function () {$.mobile.changePage('filemanager.html')};
 
 // disables firefox taphold popup menu in firefox os 2.2+
 window.oncontextmenu = function(event) {
@@ -139,7 +140,7 @@ function ChaptersListPageGenerator(args) {
 
     function showLocalChapters(book) {
         // Removed until there is a solution for the async storage problem
-        /*var $dl_all = $('<li/>', {
+        var $dl_all = $('<li/>', {
             html: $('<a/>', {
                 text: 'Download all chapters (WIP)'
             }),
@@ -147,20 +148,15 @@ function ChaptersListPageGenerator(args) {
                 var that = this;
                 $(that).unbind('click');
                 
-                //temp
-                var i = 0;
                 book.chapters.forEach(function (chapter) {
-                    if ( i < 4 ) {
                         var chapter_list_element = $('[chapter-index="' + chapter.index + '"]');
                         downloadChapterWithCbk(book, chapter, chapter_list_element);
-                    }
-                    i++;
                 });
             }
         }).attr('data-icon', 'arrow-d');
         $dl_all.append(PROGRESSBAR_HTML);
         
-        $(selectors.list).append($dl_all);*/
+        $(selectors.list).append($dl_all);
         $.each(book.chapters, function (index, chapter) {
             generateChapterListItem(book, chapter, this);
         });
@@ -215,7 +211,7 @@ function BookDownloadManager(args) {
         httpRequestHandler = args.httpRequestHandler,
         storageManager = args.storageManager,
         fileManager = args.fileManager;
-
+    
     function downloadFile(url, finished_callback, progress_callback) {
         var req_progress_callback;
         var additional_args = {};
@@ -311,19 +307,49 @@ function BookStorageManager(args) {
 function BookReferenceManager(args) {
     var args = args || {},
         async_storage = args.asyncStorage,
+        storageManager,
         obj_storage = {},
         that = this,
-        storageManager = args.storageManager,
-        JSON_PREFIX = this.JSON_PREFIX = 'bookid_';
+        JSON_PREFIX = this.JSON_PREFIX = 'bookid_',
+        current_jobs = {};
     
     this.obj_storage = obj_storage; // for testing
 
+    function strip_functions(obj) {
+        var cloned_obj = jQuery.extend(true, {}, obj);
+        console.log('stripping functions from', cloned_obj);
+        Object.keys(obj).forEach(function (key) {
+            if (typeof obj[key] === 'function') {
+                delete obj[key]
+            }
+        })
+        console.log('is now ', obj)
+        return obj;
+    }
+    
+    function store_in_async (book_id, obj) {
+        console.log('store_in_async called.')
+        var obj_to_store = strip_functions(obj);
+        async_storage.setItem(JSON_PREFIX + book_id, obj_to_store, function (transaction) {
+            console.log('wrote to asyncStorage:', obj_to_store);
+            var job = current_jobs[book_id];
+            console.log('job.when_done is', job.when_done)
+            var _when_done = job.when_done;
+            job.when_done = undefined;
+            _when_done && _when_done();
+            job.status = 'DONE';
+            console.log('DONE! job store is now ' + JSON.stringify(current_jobs))
+        });
+    }
+    
     this.storeJSONReference = function (book_obj, chapter_obj, path, options) {
+        
         options = options || {}
         if (!isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
-        function onload_reference (obj) {
+        that.loadJSONReference(book_obj.id, function (obj) {
+            console.log('loadJSONReference callback evaluated');
             var obj = obj || {};
             obj.title = obj.title || book_obj.title;
             obj.id    = obj.id    || book_obj.id;
@@ -335,20 +361,28 @@ function BookReferenceManager(args) {
                 path: path,
                 name: chapter_obj.name
             };
-            async_storage.setItem(JSON_PREFIX + book_obj.id, obj, function () {
-                console.log('wrote to asyncStorage:', obj);
-            });
+            
+            var curr_job = current_jobs[book_obj.id];
+            if (curr_job && curr_job.status === 'WORKING') {
+                console.log('currently job store is busy: ' + JSON.stringify(current_jobs) + ' so when_done is being set.' );
+                curr_job.when_done = function () {
+                    console.log('when_done called for job store ' + JSON.stringify(current_jobs) + ' and chapter ', chapter_obj);
+                    store_in_async(book_obj.id, obj);
+                };
+            } else {
+                console.log('No current task for job store ' + JSON.stringify(current_jobs) + ', storing obj')
+                current_jobs[book_obj.id] = {
+                    status: 'WORKING', 
+                    when_done: undefined
+                };
+                store_in_async(book_obj.id, obj);
+            }
+            
             applyHelperFunctions(obj);
             obj_storage[JSON_PREFIX + book_obj.id] = obj;
             
             options.reference_created && options.reference_created(obj);
-        };
-        var already_loaded_ref = obj_storage[JSON_PREFIX + book_obj.id]
-        if (already_loaded_ref) {
-            onload_reference(already_loaded_ref);
-        } else {
-            that.loadJSONReference(book_obj.id, onload_reference);
-        }
+        });
     };
 
     this.loadJSONReference = function (book_id, load_callback, prefix) {
@@ -360,9 +394,16 @@ function BookReferenceManager(args) {
             load_callback(os_book_ref);
         } else {
             async_storage.getItem( (prefix + book_id), function (obj) {
-                applyHelperFunctions(obj);
-                obj_storage[prefix + book_id] = obj;
-                load_callback(obj);
+                console.log('from storage:', obj);
+                console.log('from obj:', obj_storage[prefix + book_id]);
+                if (obj_storage[prefix + book_id]) { // if the object has loaded since the async was called
+                    console.log('object was added to object_storage after async getItem called');
+                    load_callback(obj_storage[prefix + book_id]);
+                } else {
+                    applyHelperFunctions(obj);
+                    obj_storage[prefix + book_id] = obj;
+                    load_callback(obj);
+                }
             });
         }
     };
@@ -751,6 +792,8 @@ function StoredBooksPageGenerator(args) {
 }
 
 function StoredChaptersPageGenerator(args) {
+    'use strict';
+    
     var that = this,
         ui_state = args.ui_state;
 
@@ -763,7 +806,7 @@ function StoredChaptersPageGenerator(args) {
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
             ui_state.book_ref.eachChapter(function (chapter_ref, index) {
-                createListItem(chapter_ref).bind('taphold', function () {
+                createListItem(chapter_ref, index).bind('taphold', function () {
                     var that = this;
                     $(selectors.book_actions_popup).popup('open', {
                         transition: 'pop',
@@ -789,13 +832,13 @@ function StoredChaptersPageGenerator(args) {
         });
     };
     
-    function createListItem(chapter_ref) {
+    function createListItem(chapter_ref, chapter_index) {
         var link = $('<a/>', {
             'class': 'showFullText',
             href: 'book.html',
             text: chapter_ref.name,
             click: function () {
-                ui_state.chapter_ref = chapter_ref;
+                ui_state.chapter_index = chapter_index;
             }
         });
         return $('<li/>', {
@@ -807,16 +850,56 @@ function StoredChaptersPageGenerator(args) {
 
 function Player(args) {
     var audio_element,
-        curr_book;
+        create_object_url_fn = args.createObjectURL || URL.createObjectURL,
+        fileManager = args.fileManager,
+        that = this;
     
-    this.playBook = function (obj, index) {
+    this.queueBook = function (obj, index, options) {
+        options = options || {};
+        audio_element = regenAudioElement();
         
+        fileManager.getFileFromPath(
+            obj[index].path,
+            function (file) {
+                audio_element.src = create_object_url_fn(file);
+            }, 
+            options.load_error
+        );
+        
+        audio_element.addEventListener('loadedmetadata', function () {
+            console.log('loaded metadata');
+            audio_element.currentTime = options.currentTime || 0;
+            options.load_metadata && options.load_metadata(audio_element);
+        });
+        
+        audio_element.addEventListener('loadeddata', function () {
+            console.log('loaded data');
+            options.load_data && options.load_data(audio_element);
+        });
+        
+        audio_element.addEventListener('ended', function () {
+            console.log('ended event fired');
+            if (obj.hasOwnProperty(index + 1)) {
+                that.queueBook(obj, index + 1);
+            }
+        });
+    }
+    
+    function regenAudioElement() { // is this necessary?
+        delete audio_element;
+        audio_element = new Audio();
+        return audio_element
+    }
+    
+    this.getAudioElement = function () { // should only be used in tests
+        return audio_element;
     }
 }
 
 function BookPlayerPageGenerator(args) {
     var ui_state = args.ui_state,
         fileManager = args.fileManager,
+        player = args.player
         that = this;
 
     this.generatePage = function (audio_url, chapter_name) {
@@ -828,11 +911,11 @@ function BookPlayerPageGenerator(args) {
     this.registerEvents = function (selectors) {
         var page = selectors.page;
         $(document).on("pagecreate", selectors.page, function (event) {
-            if (!ui_state.chapter_ref) {
+            if (!isFinite(ui_state.chapter_index)) {
                 console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
                 return false;
             }
-            fileManager.getFileFromPath(
+            /*fileManager.getFileFromPath(
                 ui_state.chapter_ref.path, 
                 function (file) {
                     var file_url = ui_state.file_url = URL.createObjectURL(file);
@@ -841,7 +924,9 @@ function BookPlayerPageGenerator(args) {
                 }, function () {
                     alert('Error loading file ' + ui_state.chapter_ref.path + ': ' + this.error.name);
                 }
-            );
+            );*/
+            player.queueBook(ui_state.book_ref, ui_state.chapter_index);
+            player.getAudioElement().play();
         });
         $(document).on('pagebeforehide', selectors.page, function (event) {
             console.log('pagehide called - revoking url for ' + ui_state.file_url);
@@ -1244,16 +1329,17 @@ function HttpRequestHandler() {
 if (lf_getDeviceStorage()) {
     createApp();
 }
+var _player;
 function createApp () {
     var settings = new SettingsManager({
             asyncStorage: asyncStorage
         }),
         fileManager = new FileManager(lf_getDeviceStorage()),
+        player = new Player({fileManager: fileManager}),
         deviceStoragesManager = new DeviceStoragesManager({
             settings: settings    
         }),
         bookReferenceManager = new BookReferenceManager({
-            storageManager: bookStorageManager,
             asyncStorage: asyncStorage
         }),
         bookStorageManager = new BookStorageManager({
@@ -1275,7 +1361,8 @@ function createApp () {
                 header: '.book-player-header'
             },
             ui_state: ui_state,
-            fileManager: fileManager
+            fileManager: fileManager,
+            player: player
         }),
         searchResultsPageGenerator = new SearchResultsPageGenerator({
             httpRequestHandler: httpRequestHandler,
@@ -1352,6 +1439,8 @@ function createApp () {
         });
         fileManager.displayAppFiles();
     });
+    
+    _player = player;
 }
 
 /*var db = new MediaDB("sdcard", undefined);

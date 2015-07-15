@@ -28,8 +28,8 @@ describe('BookReferenceManager()', function () {
         
         brm = new BookReferenceManager({
             asyncStorage: async_storage,
-            storageManager: mockStorageManager
         });
+        brm.registerStorageManager(mockStorageManager);
     });
 
     describe('#loadJSONReference()', function () {

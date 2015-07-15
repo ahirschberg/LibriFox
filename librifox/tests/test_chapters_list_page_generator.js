@@ -21,9 +21,11 @@ describe('ChaptersListPageGenerator()', function () {
             dlSpy = sinon.spy(dlManager, 'downloadChapter');
 
             cpg = new ChaptersListPageGenerator({
-                'httpRequestHandler': new StubHttpRequestHandler(),
-                'list_selector': '#chapters-list', // todo test book name in header
-                'bookDownloadManager': dlManager
+                httpRequestHandler: new StubHttpRequestHandler(),
+                selectors: {
+                    list: '#chapters-list'
+                },
+                bookDownloadManager: dlManager
             });
         });
 

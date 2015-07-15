@@ -17,7 +17,9 @@ describe('BookStorageManager()', function () {
             }
         };
         var referenceMgrStub = {
-            storeJSONReference: function () {}
+            storeJSONReference: function (a, b, c, options) {
+                options.reference_created();
+            }
         };
         referenceMgrSpy = sinon.spy(referenceMgrStub, 'storeJSONReference');
         bsm = new BookStorageManager({
@@ -43,7 +45,7 @@ describe('BookStorageManager()', function () {
             request.onsuccess(); // simulate file write success
             
             expect(referenceMgrSpy.calledOnce).to.be.true;
-            expect(referenceMgrSpy.firstCall.calledWithExactly(
+            expect(referenceMgrSpy.firstCall.calledWith(
                 BOOK_OBJECT,
                 CHAPTER_OBJECT,
                 'librifox/1234/0.lfa'
