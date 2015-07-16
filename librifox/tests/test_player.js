@@ -52,7 +52,7 @@ describe('Player()', function () {
     
     describe('#play()', function () {
         it('sets the audio src to the given path', function () {
-            p.play('path1/to')
+            p.playFromPath('path1/to')
             expect(p.getAudioElement().src).to.match(/path1\/to$/);
         });
     });

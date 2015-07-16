@@ -864,7 +864,7 @@ function Player(args) {
         if (player_options.autoplay) {
             audio_element.play();
         }
-        player_options.load_data && player_options.apply(this, arguments);
+        player_options.load_data && player_options.load_data.apply(this, arguments);
     }
     function onEnded () {
         console.log('ended event fired');
@@ -883,13 +883,16 @@ function Player(args) {
         if (!options.hasOwnProperty('autoplay')) { // set queueBook to autoplay by default
             options.autoplay = true;
         }
+        
+        var user_set_ended = options.ended;
         options.ended = function () {
             that.next();
+            user_set_ended && user_set_ended.apply(this, arguments);
         };
         
         audio_element = getAudioElement();
         
-        that.play(obj[index].path, options);
+        that.playFromPath(obj[index].path, options);
     }
     
     this.next = function () {
@@ -906,7 +909,7 @@ function Player(args) {
         }
     }
     
-    this.play = function (path, options) {
+    this.playFromPath = function (path, options) {
         player_options = options || {};
         fileManager.getFileFromPath(
             path,
@@ -917,11 +920,32 @@ function Player(args) {
         );
     }
     
+    this.play = function () {
+        audio_element.play();
+    }
+    this.pause = function () {
+        audio_element.pause();
+    }
     this.togglePlaying = function () {
         if (audio_element.paused) {
-            audio_element.play();
+            that.play();
         } else {
-            audio_element.pause();
+            that.pause();
+        }
+    }
+    
+    this.position = function (desired_time) {
+        if (arguments.length === 0) {
+            return audio_element.currentTime;
+        } else {
+            audio_element.currentTime = desired_time;
+        }
+    };
+    this.positionPercent = function (desired_percentage) {
+         if (arguments.length === 0) {
+            return audio_element.currentTime / audio_element.duration;
+        } else {
+            audio_element.currentTime = desired_percentage * audio_element.duration;
         }
     }
     
@@ -943,6 +967,17 @@ function Player(args) {
         return audio_element
     }
     this.getAudioElement = getAudioElement;
+    this.currentInfo = function () {
+        if (!queue_info) {
+            return null;
+        } else {
+            return {
+                book: queue_info.book,
+                curr_index: queue_info.curr_index,
+                chapter: queue_info.book[queue_info.curr_index]
+            };
+        }
+    }
 }
 
 function BookPlayerPageGenerator(args) {
@@ -959,30 +994,43 @@ function BookPlayerPageGenerator(args) {
                 console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
                 return false;
             }
-            player.queueBook(ui_state.book_ref, ui_state.chapter_index, {
-                timeupdate: function (e) {
-                    $('.player-controls .position').val(this.currentTime / this.duration * 100);
-                    $('.player-controls .position').slider('refresh');
-                }
-            });
-            $('.player-controls .position').on('slidestart', function () {
-                player.getAudioElement().pause();
-            });
-            $('.player-controls .position').on('slidestop', function (event) {
-                player.getAudioElement().currentTime = $(this).val() / 100 * player.getAudioElement().duration;
-                player.getAudioElement().play();
-            });
-            player.getAudioElement().play();
             
-            $('.player-controls .play').click(function () {
+            var controls = selectors.player;
+            if (!(player.currentInfo() && // temporary, to make things a bit more usable
+                player.currentInfo().book.id === ui_state.book_ref.id &&
+                player.currentInfo().curr_index === ui_state.chapter_index) ) {
+                
+                player.queueBook(ui_state.book_ref, ui_state.chapter_index, {
+                    timeupdate: function () {
+                        $(controls.container + ' ' + controls.position).val(player.positionPercent());
+                        $(controls.container + ' ' + controls.position).slider('refresh');
+                    },
+                    load_data: function () {
+                        var curr_info = player.currentInfo();
+                        $(selectors.header).text(curr_info.chapter.name);
+                    }
+                });
+            }
+            
+            $(controls.container + ' ' + controls.position).on('slidestart', function () {
+                player.pause();
+            });
+            $(controls.container + ' ' + controls.position).on('slidestop', function (event) {
+                player.positionPercent($(this).val());
+                player.play();
+            });
+            
+            $(controls.container + ' ' + controls.play).click(function () {
                 player.togglePlaying();
             });
-            $('.player-controls .next').click(function () {
+            $(controls.container + ' ' + controls.next).click(function () {
                 player.next();
             });
-            $('.player-controls .back-30').click(function () {
-                player.getAudioElement().currentTime = player.getAudioElement().currentTime - 30;
-            })
+            $(controls.container + ' ' + controls.stepback).click(function () {
+                player.position(player.position() - 30);
+            });
+            
+            player.play();
         });
     };
 }
@@ -1408,10 +1456,6 @@ function createApp () {
             ui_state: ui_state
         }),
         bookPlayerPageGenerator = new BookPlayerPageGenerator({
-            selectors: {
-                audio: '#audioSource',
-                header: '.player-header'
-            },
             ui_state: ui_state,
             fileManager: fileManager,
             player: player
@@ -1471,7 +1515,17 @@ function createApp () {
         page: '#storedChapters',
         book_actions_popup: '#chapterActionsMenu'
     });
-    bookPlayerPageGenerator.registerEvents({page: '#book-player'});
+    bookPlayerPageGenerator.registerEvents({
+        page: '#book-player',
+        header: '.player-header',
+        player: {
+            container: '.player-controls',
+            play: '.play',
+            next: '.next',
+            stepback: '.back-30',
+            position: '.position'
+        }
+    });
     searchResultsPageGenerator.registerEvents({
         page: "#bookSearch",
         form: "#search-form",
