@@ -18,7 +18,7 @@ module.exports = function(config) {
       'js/jquery-2.1.3.js', // this should ensure that jquery loads before app.js, but might be unnecessary
       'jquerymobile/jquery.mobile-1.4.5.min.js',
       'js/*.js',
-      'tests/*.js',
+      'tests/*.js'
     ],
 
 

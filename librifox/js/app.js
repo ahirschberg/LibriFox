@@ -394,10 +394,7 @@ function BookReferenceManager(args) {
             load_callback(os_book_ref);
         } else {
             async_storage.getItem( (prefix + book_id), function (obj) {
-                console.log('from storage:', obj);
-                console.log('from obj:', obj_storage[prefix + book_id]);
                 if (obj_storage[prefix + book_id]) { // if the object has loaded since the async was called
-                    console.log('object was added to object_storage after async getItem called');
                     load_callback(obj_storage[prefix + book_id]);
                 } else {
                     applyHelperFunctions(obj);
@@ -849,64 +846,107 @@ function StoredChaptersPageGenerator(args) {
 }
 
 function Player(args) {
+    "use strict";
     var audio_element,
         create_object_url_fn = args.createObjectURL || URL.createObjectURL,
         fileManager = args.fileManager,
+        player_options,
+        queue_info,
         that = this;
     
-    this.queueBook = function (obj, index, options) {
-        options = options || {};
-        audio_element = regenAudioElement();
-        
-        fileManager.getFileFromPath(
-            obj[index].path,
-            function (file) {
-                audio_element.src = create_object_url_fn(file);
-            }, 
-            options.load_error
-        );
-        
-        audio_element.addEventListener('loadedmetadata', function () {
-            console.log('loaded metadata');
-            audio_element.currentTime = options.currentTime || 0;
-            options.load_metadata && options.load_metadata(audio_element);
-        });
-        
-        audio_element.addEventListener('loadeddata', function () {
-            console.log('loaded data');
-            options.load_data && options.load_data(audio_element);
-        });
-        
-        audio_element.addEventListener('ended', function () {
-            console.log('ended event fired');
-            if (obj.hasOwnProperty(index + 1)) {
-                that.queueBook(obj, index + 1);
-            }
-        });
+    function onMetadataLoad () {
+        console.log('loaded metadata');
+        audio_element.currentTime = player_options.currentTime || 0;
+        player_options.load_metadata && player_options.load_metadata.apply(this, arguments);
+    }
+    function onLoad () {
+        console.log('loaded data');
+        if (player_options.autoplay) {
+            audio_element.play();
+        }
+        player_options.load_data && player_options.apply(this, arguments);
+    }
+    function onEnded () {
+        console.log('ended event fired');
+        player_options.ended && player_options.ended.apply(this, arguments);
     }
     
-    function regenAudioElement() { // is this necessary?
-        delete audio_element;
-        audio_element = new Audio();
+    this.queueBook = function (obj, index, options) {
+        queue_info = {
+            book: obj,
+            curr_index: index
+        };
+        options = options || {};
+        if (!options.hasOwnProperty('autoplay')) { // set queueBook to autoplay by default
+            options.autoplay = true;
+        }
+        options.ended = function () {
+            that.next();
+        };
+        
+        audio_element = getAudioElement();
+        
+        that.play(obj[index].path, options);
+    }
+    
+    this.next = function () {
+        if (queue_info) {
+            var index = queue_info.curr_index;
+            if (queue_info.book.hasOwnProperty(index + 1)) {
+                that.queueBook(queue_info.book, index + 1, player_options);
+            } else {
+                console.log('Ending playback, no chapter with index ' + (index + 1));
+                queue_info = undefined;
+            }
+        } else {
+            console.warn('Could not go to next track, nothing in queue.');
+        }
+    }
+    
+    this.play = function (path, options) {
+        player_options = options || {};
+        fileManager.getFileFromPath(
+            path,
+            function (file) {
+                getAudioElement().src = create_object_url_fn(file);
+            }, 
+            player_options.load_error
+        );
+    }
+    
+    this.togglePlaying = function () {
+        if (audio_element.paused) {
+            audio_element.play();
+        } else {
+            audio_element.pause();
+        }
+    }
+    
+    function getAudioElement () {
+        if (!audio_element) {
+            audio_element = new Audio();
+
+            if (navigator.mozAudioChannelManager) {
+                navigator.mozAudioChannelManager.volumeControlChannel = 'content';
+            }
+            audio_element.mozAudioChannelType = 'content';
+            
+            audio_element.addEventListener('loadedmetadata', onMetadataLoad);
+            audio_element.addEventListener('loadeddata', onLoad);
+            audio_element.addEventListener('ended', onEnded);
+        }
+        
         return audio_element
     }
-    
-    this.getAudioElement = function () { // should only be used in tests
-        return audio_element;
-    }
+    this.getAudioElement = getAudioElement;
 }
 
 function BookPlayerPageGenerator(args) {
+    "use strict";
     var ui_state = args.ui_state,
         fileManager = args.fileManager,
-        player = args.player
+        player = args.player,
         that = this;
-
-    this.generatePage = function (audio_url, chapter_name) {
-        //alert('generated page with audio_url ' + audio_url + ' and chapter_name ' + chapter_name);
-        $(args.selectors.audio).prop("src", audio_url);
-        $(args.selectors.header).text(chapter_name);
-    };
 
     this.registerEvents = function (selectors) {
         var page = selectors.page;
@@ -915,22 +955,15 @@ function BookPlayerPageGenerator(args) {
                 console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
                 return false;
             }
-            /*fileManager.getFileFromPath(
-                ui_state.chapter_ref.path, 
-                function (file) {
-                    var file_url = ui_state.file_url = URL.createObjectURL(file);
-                    console.log(file_url);
-                    that.generatePage(file_url, ui_state.chapter_ref.name);
-                }, function () {
-                    alert('Error loading file ' + ui_state.chapter_ref.path + ': ' + this.error.name);
-                }
-            );*/
             player.queueBook(ui_state.book_ref, ui_state.chapter_index);
             player.getAudioElement().play();
-        });
-        $(document).on('pagebeforehide', selectors.page, function (event) {
-            console.log('pagehide called - revoking url for ' + ui_state.file_url);
-            URL.revokeObjectURL(ui_state.file_url);
+            
+            $('.player-controls .play').click(function () {
+                player.togglePlaying();
+            });
+            $('.player-controls .next').click(function () {
+                player.next();
+            });
         });
     };
 }

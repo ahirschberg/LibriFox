@@ -1,5 +1,5 @@
 {
-    "version": "0.5.5",
+    "version": "0.5.6",
     "name": "LibriFox",
     "description": "An audiobooks app powered by LibriVox.org",
     "launch_path": "/index.html",
@@ -21,6 +21,9 @@
         "device-storage:sdcard": {
             "access": "readwrite",
             "description": "used for reading and writing of audiobooks to sdcard"
+        },
+        "audio-channel-content": {
+            "description": "Needed to play audiobook media"
         }
     },
     "installs_allowed_from": [
