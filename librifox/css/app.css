@@ -62,3 +62,11 @@ li.filesystem_book:last-child {
     left: 0;
     right: 0;
 }
+
+/* Hide the number input for the player slider */
+.player-controls input {
+    display: none !important;
+}
+.player-controls .ui-slider-track {
+    margin-left: 15px;
+}

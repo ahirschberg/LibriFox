@@ -870,6 +870,9 @@ function Player(args) {
         console.log('ended event fired');
         player_options.ended && player_options.ended.apply(this, arguments);
     }
+    function onTimeUpdate () {
+        player_options.timeupdate && player_options.timeupdate.apply(this, arguments);
+    }
     
     this.queueBook = function (obj, index, options) {
         queue_info = {
@@ -934,6 +937,7 @@ function Player(args) {
             audio_element.addEventListener('loadedmetadata', onMetadataLoad);
             audio_element.addEventListener('loadeddata', onLoad);
             audio_element.addEventListener('ended', onEnded);
+            audio_element.addEventListener('timeupdate', onTimeUpdate);
         }
         
         return audio_element
@@ -955,7 +959,19 @@ function BookPlayerPageGenerator(args) {
                 console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
                 return false;
             }
-            player.queueBook(ui_state.book_ref, ui_state.chapter_index);
+            player.queueBook(ui_state.book_ref, ui_state.chapter_index, {
+                timeupdate: function (e) {
+                    $('.player-controls .position').val(this.currentTime / this.duration * 100);
+                    $('.player-controls .position').slider('refresh');
+                }
+            });
+            $('.player-controls .position').on('slidestart', function () {
+                player.getAudioElement().pause();
+            });
+            $('.player-controls .position').on('slidestop', function (event) {
+                player.getAudioElement().currentTime = $(this).val() / 100 * player.getAudioElement().duration;
+                player.getAudioElement().play();
+            });
             player.getAudioElement().play();
             
             $('.player-controls .play').click(function () {
@@ -964,6 +980,9 @@ function BookPlayerPageGenerator(args) {
             $('.player-controls .next').click(function () {
                 player.next();
             });
+            $('.player-controls .back-30').click(function () {
+                player.getAudioElement().currentTime = player.getAudioElement().currentTime - 30;
+            })
         });
     };
 }
@@ -1391,7 +1410,7 @@ function createApp () {
         bookPlayerPageGenerator = new BookPlayerPageGenerator({
             selectors: {
                 audio: '#audioSource',
-                header: '.book-player-header'
+                header: '.player-header'
             },
             ui_state: ui_state,
             fileManager: fileManager,
