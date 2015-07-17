@@ -865,35 +865,72 @@ function StoredChaptersPageGenerator(args) {
         });
     }
 }
+EventManager = (function () {
+    "use strict";
+    
+    function Event(name) {
+        this.name = name;
+        this.callbacks = [];
+    }
+    Event.prototype.registerCallback = function (callback_obj) {
+        this.callbacks.push(callback_obj);
+    }
 
-function Event(name) {
-    this.name = name;
-    this.callbacks = [];
-}
-Event.prototype.registerCallback = function (callback) {
-    this.callbacks.push(callback);
-}
+    // I think this will memory leak due to strong references
+    // but I don't know how to work around that.
+    function EventManager () {
+        this.events = {};
+    }
+    var namespace_rxp = /([^\.]*)(?:\.(.*))?/
 
-// I think this will memory leak due to strong references
-// but I don't know how to work around that.
-function EventManager () {
-    this.events = {};
-}
+    EventManager.prototype.registerEvent = function (eventName) {
+        var event = new Event(eventName);
+        this.events[eventName] = event;
+    };
 
-EventManager.prototype.registerEvent = function (eventName) {
-    var event = new Event(eventName);
-    this.events[eventName] = event;
-};
+    EventManager.prototype.trigger = function (eventName, eventArgs) {
+        this.events[eventName].callbacks.forEach(function (callback_obj) {
+            callback_obj.callback(eventArgs);
+        });
+    };
 
-EventManager.prototype.trigger = function (eventName, eventArgs) {
-    this.events[eventName].callbacks.forEach(function (callback) {
-        callback(eventArgs);
-    });
-};
-
-EventManager.prototype.on = function (eventName, callback) {
-    this.events[eventName].registerCallback(callback);
-};
+    /*
+     * Matches events, with optional namespace separated by a '.'
+     * For example:
+     * 'click'              -> event_name 'click', namespace undefined
+     * 'click.my.namespace' -> event_name 'click', namespace 'my.namespace'
+     */
+    EventManager.prototype.on = function (event_string, callback) {
+        var event_match = event_string.match(namespace_rxp),
+            event_name = event_match[1],
+            namespace  = event_match[2];
+        
+        this.events[event_name].registerCallback({
+            callback: callback,
+            namespace: namespace
+        });
+    };
+    EventManager.prototype.off = function (event_string) {
+        var event_match = event_string.match(namespace_rxp),
+            event_name = event_match[1],
+            namespace  = event_match[2];
+        
+        
+        if (!namespace) {
+            this.events[event_name].callbacks = [];
+        } else {
+            var callback_objs = this.events[event_name].callbacks,
+                i;
+            for (i = 0; i < callback_objs.length; i++) {
+                if (callback_objs[i].namespace === namespace) {
+                    callback_objs.splice(i, 1); // can't use delete here!
+                }
+            }
+        }
+    }
+    
+    return EventManager;
+})()
 
 function Player(args) {
     "use strict";
@@ -927,9 +964,13 @@ function Player(args) {
     
     event_manager.registerEvent('play');
     event_manager.registerEvent('pause');
+    event_manager.registerEvent('finishedqueue');
     
     this.on = function (eventName, callback) {
         event_manager.on(eventName, callback);
+    }
+    this.off = function (eventName) {
+        event_manager.off(eventName);
     }
     
     this.queueBook = function (obj, index, options) {
@@ -961,6 +1002,9 @@ function Player(args) {
             } else {
                 console.log('Ending playback, no chapter with index ' + (index + 1));
                 queue_info = undefined;
+                audio_element.pause();
+                audio_element = undefined;
+                event_manager.trigger('finishedqueue');
             }
         } else {
             console.warn('Could not go to next track, nothing in queue.');
@@ -1007,6 +1051,35 @@ function Player(args) {
         } else {
             audio_element.currentTime = desired_percentage * audio_element.duration;
         }
+    }
+    this.duration = function () {
+        return audio_element.duration;
+    }
+    
+    // TODO: this function doesn't belong here :(
+    this.prettifyTime = function (float_secs, joiner) {
+        var remove_decimal = function (num) {
+                // ~~ operator chops off the decimal
+                return ~~num
+            },
+            stringify_two_digits = function (num) {
+                var stringified_num = num.toString()
+                if (num < 10) {
+                    stringified_num = '0' + stringified_num;
+                }
+                
+                return stringified_num;
+            },
+            joiner  = joiner || ':',
+            hours   = remove_decimal(float_secs / 3600),
+            minutes = remove_decimal(float_secs / 60) % 60,
+            seconds = remove_decimal(float_secs) % 60,
+            arr = [];
+        
+        hours && arr.push(stringify_two_digits(hours));
+        arr.push(stringify_two_digits(minutes));
+        arr.push(stringify_two_digits(seconds));
+        return arr.join(joiner);
     }
     
     function getAudioElement () {
@@ -1057,17 +1130,19 @@ function BookPlayerPageGenerator(args) {
 
     this.registerEvents = function (selectors) {
         var page = selectors.page;
-        $(document).on("pagecreate", selectors.page, function (event) {
-            if (!isFinite(player_context.chapter_index)) {
+        $(document).on("pageshow", selectors.page, function (event) {
+            if (!player_context.book || !isFinite(player_context.chapter_index) ) {
                 console.warn('Chapter index was undefined');
+                alert('You opened the player, but there is nothing to play.');
                 return false;
             }
             
             var controls = selectors.controls;
-
+            
             if (player.getCurrentInfo()) {
                 $(selectors.header).text(player.getCurrentInfo().chapter.name);
             }
+            
             if (!(player.getCurrentInfo() && // temporary, to make things a bit more usable
                 player.getCurrentInfo().book.id === player_context.book.id &&
                 player.getCurrentInfo().curr_index === player_context.chapter_index) ) {
@@ -1076,20 +1151,26 @@ function BookPlayerPageGenerator(args) {
                     timeupdate: function () {
                         $(concatSelectors(controls.container, controls.position)).val(player.positionPercent());
                         $(concatSelectors(controls.container, controls.position)).slider('refresh');
+                        $('.player-controls .current-position').text(player.prettifyTime(player.position()));
                     },
                     load_data: function () {
                         var curr_info = player.getCurrentInfo();
                         $(selectors.header).text(curr_info.chapter.name);
+                        $('.player-controls .total-duration').text(player.prettifyTime(player.duration()));
                     }
                 });
             }
             
-            player.on('play', function () {
+            player.on('play.player-html', function () {
+                console.log('play event fired');
                 $(concatSelectors(controls.container, controls.play)).text('Pause');
             });
-            player.on('pause', function () {
+            player.on('pause.player-html', function () {
                 $(concatSelectors(controls.container, controls.play)).text('Play');
             });
+            player.on('finishedqueue.player-html', function () {
+                $.mobile.back();
+            })
             
             $(concatSelectors(controls.container, controls.position)).on('slidestart', function () {
                 player.pause();
@@ -1110,6 +1191,12 @@ function BookPlayerPageGenerator(args) {
             });
             
             player.play();
+        });
+        
+        $(document).on("pagehide", selectors.page, function (event) {
+            player.off('play.player-html');
+            player.off('pause.player-html');
+            player.off('finishedqueue.player-html');
         });
     };
 }

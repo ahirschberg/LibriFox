@@ -70,3 +70,10 @@ li.filesystem_book:last-child {
 .player-controls .ui-slider-track {
     margin-left: 15px;
 }
+
+.player-controls .current-position {
+    float: left;
+}
+.player-controls .total-duration {
+    float: right;
+}
