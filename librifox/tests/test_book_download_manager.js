@@ -5,24 +5,6 @@ describe('BookDownloadManager()', function () {
         storageManager,
         testBlob,
         blobSpy;
-    
-    function newBDM(desired_args) {
-        var args = {
-            'httpRequestHandler': httpRequestHandler,
-            'storageManager': storageManager,
-            'fileManager': {
-                tryWriteFile: function (path, callback) {
-                    callback(true);
-                }
-            }
-        };
-        
-        // add or overwrite default properties with supplied args
-        for (var attrname in desired_args) {
-            args[attrname] = desired_args[attrname];
-        } 
-        return new BookDownloadManager(args);
-    }
 
     before(function () {
         testBlob = WEB_RESP.audio_blob;
@@ -31,7 +13,7 @@ describe('BookDownloadManager()', function () {
                 load_callback({response: testBlob});
             } // simulate LibriVox JSON title search response
         }
-        httpRequestHandler = new StubHttpRequestHandler();
+        var httpRequestHandler = new StubHttpRequestHandler();
         blobSpy = sinon.spy(httpRequestHandler, 'getBlob');
 
         storageManager = {
@@ -42,7 +24,15 @@ describe('BookDownloadManager()', function () {
         };
         writeChapterSpy = sinon.spy(storageManager, 'writeChapter');
         
-        bdm = newBDM();
+        bdm = new BookDownloadManager({
+            'httpRequestHandler': httpRequestHandler,
+            'storageManager': storageManager,
+            'fileManager': {
+                tryWriteFile: function (path, callback) {
+                    callback(true);
+                }
+            }
+        });
     });
     
     beforeEach(function () {

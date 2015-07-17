@@ -71,9 +71,9 @@ li.filesystem_book:last-child {
     margin-left: 15px;
 }
 
-.player-controls .current-position {
+.player-controls .time-readout {
     float: left;
 }
-.player-controls .total-duration {
+.player-controls .total-duration-readout {
     float: right;
 }

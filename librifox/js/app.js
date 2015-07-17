@@ -10,14 +10,20 @@ window.oncontextmenu = function(event) {
      return false;
 };
 
-var bookCache = {};
-var httpRequestHandler = new HttpRequestHandler();
+var bookCache = {}; // TODO switch this over to data handles
+
+
+// some utility methods, should probably be moved into their own classes
 
 function stripHTMLTags(str) {
     return str.replace(/<(?:.|\n)*?>/gm, '');
 }
+
+function argumentsToArray (args) {
+    return Array.prototype.slice.call(args);
+}
 function concatSelectors() {
-    var args = Array.prototype.slice.call(arguments);
+    var args = argumentsToArray(arguments);
     return args.join(' ');
 }
 
@@ -736,7 +742,6 @@ function StoredBooksPageGenerator(args) {
             console.log('pageshow called for ' + selectors.page);
             that.refreshList();
             
-            console.log(player.getCurrentInfo());
             if (player.getCurrentInfo()) { // TODO use events to make this more robust
                 $('.player-shortcut-footer').show();
             } else {
@@ -878,18 +883,30 @@ EventManager = (function () {
 
     // I think this will memory leak due to strong references
     // but I don't know how to work around that.
+    var events;
     function EventManager () {
-        this.events = {};
+        this.events = events = {};
     }
     var namespace_rxp = /([^\.]*)(?:\.(.*))?/
 
     EventManager.prototype.registerEvent = function (eventName) {
+        if (arguments.length > 1) {
+            console.error('Wrong number of arguments!');
+        }
         var event = new Event(eventName);
-        this.events[eventName] = event;
+        events[eventName] = event;
     };
+    
+    EventManager.prototype.registerEvents = function () {
+        var args = argumentsToArray(arguments),
+            that = this;
+        args.forEach(function (eventName) {
+            that.registerEvent(eventName);
+        });
+    }
 
     EventManager.prototype.trigger = function (eventName, eventArgs) {
-        this.events[eventName].callbacks.forEach(function (callback_obj) {
+        events[eventName].callbacks.forEach(function (callback_obj) {
             callback_obj.callback(eventArgs);
         });
     };
@@ -910,27 +927,42 @@ EventManager = (function () {
             namespace: namespace
         });
     };
-    EventManager.prototype.off = function (event_string) {
-        var event_match = event_string.match(namespace_rxp),
-            event_name = event_match[1],
-            namespace  = event_match[2];
-        
-        
-        if (!namespace) {
-            this.events[event_name].callbacks = [];
-        } else {
-            var callback_objs = this.events[event_name].callbacks,
-                i;
+    
+    var remove_namespace_callbacks = function (callback_objs, namespace) {
+            var i;
             for (i = 0; i < callback_objs.length; i++) {
+                console.log('checking callback obj with index ' + i + ' and namespace ' + namespace);
                 if (callback_objs[i].namespace === namespace) {
                     callback_objs.splice(i, 1); // can't use delete here!
                 }
+            }
+        },
+        getEventCallbacks = function (key) {
+            return events[key].callbacks;
+        }
+    
+    EventManager.prototype.off = function (event_string) {
+        if (event_string[0] === '.') {
+            var namespace = event_string.slice(1);
+            Object.keys(this.events).forEach(function (key) {
+                remove_namespace_callbacks(getEventCallbacks(key), namespace);
+            });
+        } else {
+            var event_match = event_string.match(namespace_rxp),
+                event_name = event_match[1],
+                namespace  = event_match[2];
+
+
+            if (!namespace) {
+                this.events[event_name].callbacks = [];
+            } else {
+                remove_namespace_callbacks(getEventCallbacks(event_name), namespace)
             }
         }
     }
     
     return EventManager;
-})()
+})();
 
 function Player(args) {
     "use strict";
@@ -943,28 +975,26 @@ function Player(args) {
         that = this;
     
     function onMetadataLoad () {
-        console.log('loaded metadata');
-        audio_element.currentTime = player_options.currentTime || 0;
+        event_manager.trigger('loadmetadata');
         player_options.load_metadata && player_options.load_metadata.apply(this, arguments);
     }
     function onLoad () {
-        console.log('loaded data');
         if (player_options.autoplay) {
             audio_element.play();
         }
+        event_manager.trigger('loaddata');
         player_options.load_data && player_options.load_data.apply(this, arguments);
     }
     function onEnded () {
-        console.log('ended event fired');
+        event_manager.trigger('ended');
         player_options.ended && player_options.ended.apply(this, arguments);
     }
     function onTimeUpdate () {
+        event_manager.trigger('timeupdate');
         player_options.timeupdate && player_options.timeupdate.apply(this, arguments);
     }
     
-    event_manager.registerEvent('play');
-    event_manager.registerEvent('pause');
-    event_manager.registerEvent('finishedqueue');
+    event_manager.registerEvents('loadmetadata', 'loaddata', 'play', 'pause', 'timeupdate', 'ended', 'finishedqueue');
     
     this.on = function (eventName, callback) {
         event_manager.on(eventName, callback);
@@ -1001,9 +1031,9 @@ function Player(args) {
                 that.queueBook(queue_info.book, index + 1, player_options);
             } else {
                 console.log('Ending playback, no chapter with index ' + (index + 1));
-                queue_info = undefined;
                 audio_element.pause();
                 audio_element = undefined;
+                queue_info = undefined;
                 event_manager.trigger('finishedqueue');
             }
         } else {
@@ -1100,6 +1130,7 @@ function Player(args) {
         return audio_element
     }
     this.getAudioElement = getAudioElement;
+    
     this.getCurrentInfo = function () {
         if (!queue_info) {
             return null;
@@ -1138,10 +1169,7 @@ function BookPlayerPageGenerator(args) {
             }
             
             var controls = selectors.controls;
-            
-            if (player.getCurrentInfo()) {
-                $(selectors.header).text(player.getCurrentInfo().chapter.name);
-            }
+            setPlayerControls(selectors, controls);
             
             if (!(player.getCurrentInfo() && // temporary, to make things a bit more usable
                 player.getCurrentInfo().book.id === player_context.book.id &&
@@ -1151,15 +1179,17 @@ function BookPlayerPageGenerator(args) {
                     timeupdate: function () {
                         $(concatSelectors(controls.container, controls.position)).val(player.positionPercent());
                         $(concatSelectors(controls.container, controls.position)).slider('refresh');
-                        $('.player-controls .current-position').text(player.prettifyTime(player.position()));
+                        $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
                     },
                     load_data: function () {
-                        var curr_info = player.getCurrentInfo();
-                        $(selectors.header).text(curr_info.chapter.name);
-                        $('.player-controls .total-duration').text(player.prettifyTime(player.duration()));
+                        setPlayerControls(selectors, controls);
                     }
                 });
             }
+            
+            player.on('timeupdate.player-html', function () {
+                
+            })
             
             player.on('play.player-html', function () {
                 console.log('play event fired');
@@ -1189,16 +1219,23 @@ function BookPlayerPageGenerator(args) {
             $(concatSelectors(controls.container, controls.stepback)).click(function () {
                 player.position(player.position() - 30);
             });
-            
-            player.play();
         });
         
-        $(document).on("pagehide", selectors.page, function (event) {
-            player.off('play.player-html');
-            player.off('pause.player-html');
-            player.off('finishedqueue.player-html');
+        $(document).on('pagehide', selectors.page, function (event) {
+            player.off('.player-html');
         });
     };
+    
+    function setPlayerControls (selectors, controls) {
+        if (player.getCurrentInfo()) {
+            $(selectors.header).text(player.getCurrentInfo().chapter.name);
+            player_context.book = player.getCurrentInfo().book;
+            player_context.chapter_index = player.getCurrentInfo().curr_index;
+            
+            player.position() && $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
+            player.duration() && $(concatSelectors(controls.container, controls.duration_text)).text(player.prettifyTime(player.duration()));
+        }
+    }
 }
 
 function SettingsManager (args) {
@@ -1601,7 +1638,10 @@ function createApp () {
             asyncStorage: asyncStorage
         }),
         fileManager = new FileManager(lf_getDeviceStorage()),
-        player = new Player({fileManager: fileManager}),
+        httpRequestHandler = new HttpRequestHandler(),
+        player = new Player({
+            fileManager: fileManager
+        }),
         deviceStoragesManager = new DeviceStoragesManager({
             settings: settings    
         }),
@@ -1687,7 +1727,9 @@ function createApp () {
             play: '.play',
             next: '.next',
             stepback: '.back-30',
-            position: '.position'
+            position: '.time-slider',
+            position_text: '.time-readout',
+            duration_text: '.total-duration-readout'
         }
     });
     searchResultsPageGenerator.registerEvents({
