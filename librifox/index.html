@@ -34,20 +34,18 @@
         <div data-role="popup" id="bookActionsMenu" data-theme="b">
             <ul data-role="listview" data-inset="true" style="min-width:210px;">
                 <li data-role="list-divider">Choose an action</li>
-                <li><a href="#" class="delete_book">Delete</a></li>
+                <li><a href="#" class="delete_book">Delete</a>
+                </li>
             </ul>
         </div>
-        <div data-role="popup" id="create_folder_dialog" data-overlay-theme="b" data-theme="b" data-dismissible="false" style="max-width:400px;">
-            <div data-role="header" data-theme="a">
-                <h1>Create Folder?</h1>
-            </div>
-            <div role="main" class="ui-content">
-                <h3 class="ui-title">LibriFox Audiobooks/</h3>
-                <p>You can add your own .mp3 files (renamed to .lfa) to this folder.  Would you like for it to be created?</p>
-                <a href="#" class="ui-btn ui-corner-all ui-shadow ui-btn-inline ui-btn-b" data-rel="back">No</a>
-                <a href="#" class="yes_create_folder ui-btn ui-corner-all ui-shadow ui-btn-inline ui-btn-b" data-rel="back" data-transition="flow">Yes, create folder</a>
+        <div data-role="footer" class="player-shortcut-footer" data-position="fixed" data-tap-toggle="false">
+            <div data-role="navbar">
+                <ul>
+                    <li><a href="book.html" class="player-shortcut-a">Go to player (NOT)</a></li>
+                </ul>
             </div>
         </div>
+        <!-- /footer -->
     </div>
 </body>
 

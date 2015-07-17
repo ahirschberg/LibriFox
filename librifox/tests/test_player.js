@@ -50,7 +50,7 @@ describe('Player()', function () {
         })
     });
     
-    describe('#play()', function () {
+    describe('#playFromPath()', function () {
         it('sets the audio src to the given path', function () {
             p.playFromPath('path1/to')
             expect(p.getAudioElement().src).to.match(/path1\/to$/);

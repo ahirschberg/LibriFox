@@ -15,11 +15,21 @@
         </header>
         <section>
             <div class="player-controls">
-                <button class="play ui-btn ui-btn-inline">Play/Pause</button>
-                <button class="next ui-btn ui-btn-inline">Next</button>
-                <button class="back-30 ui-btn ui-btn-inline">Back 30sec</button>
-                <label for="player-position" class="ui-hidden-accessible">Position</label>
-                <input type="range" name="player-position" data-highlight="true" class="position" min="0" max="1" value="0" step="0.01">
+                <div class="ui-grid-a">
+                    <div class="ui-block-a">
+                        <button class="play ui-btn">Play/Pause</button>
+                    </div>
+                    <div class="ui-block-b">
+                        <button class="next ui-btn">Next</button>
+                    </div>
+                    <div class="ui-block-c">
+                        <button class="back-30">Back 30sec</button>
+                    </div>
+                </div>
+                <div class="player-position-container" style="margin: 0 15px">
+                    <label for="player-position" class="ui-hidden-accessible">Position</label>
+                    <input type="range" name="player-position" data-highlight="true" class="position" min="0" max="1" value="0" step="0.01">
+                </div>
             </div>
         </section>
     </div>

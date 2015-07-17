@@ -5,16 +5,17 @@
   "main": "index.js",
   "dependencies": {},
   "devDependencies": {
-    "mocha": "^2.2.1",
     "chai": "^2.1.2",
-    "karma-cli": "^0.0.4",
-    "karma-chai": "^0.1.0",
     "karma": "^0.12.31",
-    "karma-sinon": "^1.0.4",
-    "karma-mocha": "^0.1.10",
+    "karma-chai": "^0.1.0",
+    "karma-cli": "^0.0.4",
     "karma-firefox-launcher": "^0.1.4",
+    "karma-mocha": "^0.1.10",
+    "karma-sinon": "^1.0.4",
+    "karma-sinon-chai": "^1.0.0",
+    "mocha": "^2.2.1",
     "sinon": "^1.14.1",
-    "sinon-chai": "^2.7.0"
+    "sinon-chai": "^2.8.0"
   },
   "scripts": {
     "test": "karma"

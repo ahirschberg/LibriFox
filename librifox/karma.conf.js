@@ -10,7 +10,7 @@ module.exports = function(config) {
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
-    frameworks: ['mocha', 'chai', 'sinon'],
+    frameworks: ['mocha', 'sinon-chai'], // I have no idea why I had to remove 'sinon' and 'chai', but now things seem to work
 
 
     // list of files / patterns to load in the browser

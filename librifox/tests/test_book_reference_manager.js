@@ -222,8 +222,8 @@ describe('BookReferenceManager()', function () {
                     expect(book_ref).not.to.have.property(0);
                     expect(book_ref).property('1').to.be.an('object');
 
-                    expect(success_spy.callCount).to.equal(1);
-                    expect(storageMgr_delete_spy.callCount).to.equal(1);
+                    expect(success_spy).to.have.been.calledOnce;
+                    expect(storageMgr_delete_spy).to.have.been.calledOnce;
                     brm.loadJSONReference(9999, function (book_ref_copy) {
                         expect(book_ref_copy).not.to.have.property(0);
                         expect(book_ref_copy).property('1').to.be.an('object');

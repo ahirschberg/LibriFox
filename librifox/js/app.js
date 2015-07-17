@@ -16,6 +16,10 @@ var httpRequestHandler = new HttpRequestHandler();
 function stripHTMLTags(str) {
     return str.replace(/<(?:.|\n)*?>/gm, '');
 }
+function concatSelectors() {
+    var args = Array.prototype.slice.call(arguments);
+    return args.join(' ');
+}
 
 function Book(args) {
     this.chapters = args.chapters;
@@ -33,6 +37,7 @@ function Chapter(args) {
     this.index = args.index;
     this.url = args.url;
 }
+// set static function
 Chapter.parseFromXML = function (xml_string) {
     var xml = $(xml_string),
         $items = xml.find("item"),
@@ -74,7 +79,7 @@ function ChaptersListPageGenerator(args) {
         selectors = args.selectors,
         bookDownloadManager = args.bookDownloadManager,
         bookReferenceManager = args.bookReferenceManager,
-        storedBookUiState = args.storedBookUiState,
+        stored_chapters_data_handle = args.stored_chapters_data_handle,
         PROGRESSBAR_HTML =  '<div class="progressBar" style="display: none">' +
                             '<div class="progressBarSlider"></div></div>';
 
@@ -100,7 +105,7 @@ function ChaptersListPageGenerator(args) {
             show_footer = function (book_ref) {
                 $(selectors.footer_alert)
                     .click(function () {
-                        storedBookUiState.book_ref = book_ref;
+                        stored_chapters_data_handle(book_ref);
                     })
                     .show({
                         complete: function () {
@@ -714,11 +719,13 @@ function FilesystemBookReferenceManager(args) {
 }
 
 function StoredBooksPageGenerator(args) {
+    "use strict";
     var that = this,
         referenceManager = args.bookReferenceManager,
         fsReferenceManager = args.fsBookReferenceManager,
         selectors,
-        ui_state = args.ui_state;
+        chapters_data_handle = args.chapters_data_handle,
+        player = args.player;
 
     this.registerEvents = function (_selectors) {
         selectors = _selectors;
@@ -728,6 +735,13 @@ function StoredBooksPageGenerator(args) {
         $(document).on('pageshow', selectors.page, function () {
             console.log('pageshow called for ' + selectors.page);
             that.refreshList();
+            
+            console.log(player.getCurrentInfo());
+            if (player.getCurrentInfo()) { // TODO use events to make this more robust
+                $('.player-shortcut-footer').show();
+            } else {
+                $('.player-shortcut-footer').hide();
+            }
         });
         $(document).on('pagecreate', selectors.page, function () {
             $(selectors.book_actions_popup).bind({
@@ -778,7 +792,7 @@ function StoredBooksPageGenerator(args) {
             text: book_obj.title,
             href: 'stored_chapters.html',
             click: function () {
-                ui_state.book_ref = book_obj
+                chapters_data_handle(book_obj);
             }
         });
         return $('<li/>', {
@@ -792,17 +806,24 @@ function StoredChaptersPageGenerator(args) {
     'use strict';
     
     var that = this,
-        ui_state = args.ui_state;
+        player_data_handle = args.player_data_handle,
+        ui_state = {};
+    
+    this.getDataHandle = function () {
+        return function (book) {
+            ui_state.book = book;
+        }
+    }
 
     this.registerEvents = function (selectors) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
         $(document).on('pageshow', selectors.page, function () {
-            $(selectors.header_title).text(ui_state.book_ref.title);
+            $(selectors.header_title).text(ui_state.book.title);
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
-            ui_state.book_ref.eachChapter(function (chapter_ref, index) {
+            ui_state.book.eachChapter(function (chapter_ref, index) {
                 createListItem(chapter_ref, index).bind('taphold', function () {
                     var that = this;
                     $(selectors.book_actions_popup).popup('open', {
@@ -810,7 +831,7 @@ function StoredChaptersPageGenerator(args) {
                         positionTo: that // neat, positions over the held element!
                     });
                     $(selectors.book_actions_popup + ' .delete_chapter').click(function () {
-                        ui_state.book_ref.deleteChapter(index, function () {
+                        ui_state.book.deleteChapter(index, function () {
                             $(that).remove();
                             $(selectors.page + ' ul').listview('refresh');
                         })
@@ -835,7 +856,7 @@ function StoredChaptersPageGenerator(args) {
             href: 'book.html',
             text: chapter_ref.name,
             click: function () {
-                ui_state.chapter_index = chapter_index;
+                player_data_handle(ui_state.book, chapter_index);
             }
         });
         return $('<li/>', {
@@ -845,6 +866,35 @@ function StoredChaptersPageGenerator(args) {
     }
 }
 
+function Event(name) {
+    this.name = name;
+    this.callbacks = [];
+}
+Event.prototype.registerCallback = function (callback) {
+    this.callbacks.push(callback);
+}
+
+// I think this will memory leak due to strong references
+// but I don't know how to work around that.
+function EventManager () {
+    this.events = {};
+}
+
+EventManager.prototype.registerEvent = function (eventName) {
+    var event = new Event(eventName);
+    this.events[eventName] = event;
+};
+
+EventManager.prototype.trigger = function (eventName, eventArgs) {
+    this.events[eventName].callbacks.forEach(function (callback) {
+        callback(eventArgs);
+    });
+};
+
+EventManager.prototype.on = function (eventName, callback) {
+    this.events[eventName].registerCallback(callback);
+};
+
 function Player(args) {
     "use strict";
     var audio_element,
@@ -852,6 +902,7 @@ function Player(args) {
         fileManager = args.fileManager,
         player_options,
         queue_info,
+        event_manager = new EventManager(),
         that = this;
     
     function onMetadataLoad () {
@@ -872,6 +923,13 @@ function Player(args) {
     }
     function onTimeUpdate () {
         player_options.timeupdate && player_options.timeupdate.apply(this, arguments);
+    }
+    
+    event_manager.registerEvent('play');
+    event_manager.registerEvent('pause');
+    
+    this.on = function (eventName, callback) {
+        event_manager.on(eventName, callback);
     }
     
     this.queueBook = function (obj, index, options) {
@@ -921,9 +979,11 @@ function Player(args) {
     }
     
     this.play = function () {
+        event_manager.trigger('play');
         audio_element.play();
     }
     this.pause = function () {
+        event_manager.trigger('pause');
         audio_element.pause();
     }
     this.togglePlaying = function () {
@@ -967,7 +1027,7 @@ function Player(args) {
         return audio_element
     }
     this.getAudioElement = getAudioElement;
-    this.currentInfo = function () {
+    this.getCurrentInfo = function () {
         if (!queue_info) {
             return null;
         } else {
@@ -982,51 +1042,70 @@ function Player(args) {
 
 function BookPlayerPageGenerator(args) {
     "use strict";
-    var ui_state = args.ui_state,
+    var player_context = {},
         fileManager = args.fileManager,
         player = args.player,
         that = this;
+    
+    this.getDataHandle = function () {
+        return function (curr_book, chapter_index) {
+            player_context = {};
+            player_context.book = curr_book;
+            player_context.chapter_index = chapter_index;
+        }
+    }
 
     this.registerEvents = function (selectors) {
         var page = selectors.page;
         $(document).on("pagecreate", selectors.page, function (event) {
-            if (!isFinite(ui_state.chapter_index)) {
-                console.warn("Chapters List: the chapter reference was undefined, which freezes the app.  Did you refresh from WebIDE?");
+            if (!isFinite(player_context.chapter_index)) {
+                console.warn('Chapter index was undefined');
                 return false;
             }
             
-            var controls = selectors.player;
-            if (!(player.currentInfo() && // temporary, to make things a bit more usable
-                player.currentInfo().book.id === ui_state.book_ref.id &&
-                player.currentInfo().curr_index === ui_state.chapter_index) ) {
+            var controls = selectors.controls;
+
+            if (player.getCurrentInfo()) {
+                $(selectors.header).text(player.getCurrentInfo().chapter.name);
+            }
+            if (!(player.getCurrentInfo() && // temporary, to make things a bit more usable
+                player.getCurrentInfo().book.id === player_context.book.id &&
+                player.getCurrentInfo().curr_index === player_context.chapter_index) ) {
                 
-                player.queueBook(ui_state.book_ref, ui_state.chapter_index, {
+                player.queueBook(player_context.book, player_context.chapter_index, {
                     timeupdate: function () {
-                        $(controls.container + ' ' + controls.position).val(player.positionPercent());
-                        $(controls.container + ' ' + controls.position).slider('refresh');
+                        $(concatSelectors(controls.container, controls.position)).val(player.positionPercent());
+                        $(concatSelectors(controls.container, controls.position)).slider('refresh');
                     },
                     load_data: function () {
-                        var curr_info = player.currentInfo();
+                        var curr_info = player.getCurrentInfo();
                         $(selectors.header).text(curr_info.chapter.name);
                     }
                 });
             }
             
-            $(controls.container + ' ' + controls.position).on('slidestart', function () {
+            player.on('play', function () {
+                $(concatSelectors(controls.container, controls.play)).text('Pause');
+            });
+            player.on('pause', function () {
+                $(concatSelectors(controls.container, controls.play)).text('Play');
+            });
+            
+            $(concatSelectors(controls.container, controls.position)).on('slidestart', function () {
                 player.pause();
             });
-            $(controls.container + ' ' + controls.position).on('slidestop', function (event) {
+            $(concatSelectors(controls.container, controls.position)).on('slidestop', function (event) {
                 player.positionPercent($(this).val());
                 player.play();
             });
             
-            $(controls.container + ' ' + controls.play).click(function () {
+            $(concatSelectors(controls.container, controls.play)).click(function () {
                 player.togglePlaying();
             });
-            $(controls.container + ' ' + controls.next).click(function () {
+            $(concatSelectors(controls.container, controls.next)).click(function () {
                 player.next();
             });
-            $(controls.container + ' ' + controls.stepback).click(function () {
+            $(concatSelectors(controls.container, controls.stepback)).click(function () {
                 player.position(player.position() - 30);
             });
             
@@ -1451,14 +1530,12 @@ function createApp () {
             storageManager: bookStorageManager,
             fileManager: fileManager
         }),
-        ui_state = {}, // TODO figure out a sane-er/more elegant way to transfer state
-        storedChaptersPageGenerator = new StoredChaptersPageGenerator({
-            ui_state: ui_state
-        }),
         bookPlayerPageGenerator = new BookPlayerPageGenerator({
-            ui_state: ui_state,
             fileManager: fileManager,
             player: player
+        }),
+        storedChaptersPageGenerator = new StoredChaptersPageGenerator({
+            player_data_handle: bookPlayerPageGenerator.getDataHandle(),
         }),
         searchResultsPageGenerator = new SearchResultsPageGenerator({
             httpRequestHandler: httpRequestHandler,
@@ -1471,11 +1548,11 @@ function createApp () {
                 list: '#chaptersList',
                 book_title: '.book-title-disp',
                 book_description: '.book-desc-disp',
-                footer_alert: '#player-shortcut-footer'
+                footer_alert: '#stored-chapters-shortcut-footer'
             },
             bookDownloadManager: bookDownloadManager,
             bookReferenceManager: bookReferenceManager,
-            storedBookUiState: ui_state
+            stored_chapters_data_handle: storedChaptersPageGenerator.getDataHandle()
         }),
         bookReferenceValidator = new BookReferenceValidator({
             referenceManager: bookReferenceManager,
@@ -1488,7 +1565,8 @@ function createApp () {
         storedBooksPageGenerator = new StoredBooksPageGenerator({
             bookReferenceManager: bookReferenceManager,
             fsBookReferenceManager: fsBookReferenceManager,
-            ui_state: ui_state
+            chapters_data_handle: storedChaptersPageGenerator.getDataHandle(),
+            player: player
         }),
         settingsPageGenerator = new SettingsPageGenerator({
             settings: settings,
@@ -1507,7 +1585,6 @@ function createApp () {
         list: '#stored-books-list',
         page: '#storedBooks',
         book_actions_popup: '#bookActionsMenu',
-        create_lfa_folder_dialog: '#create_folder_dialog'
     });
     storedChaptersPageGenerator.registerEvents({
         header_title: '.chapter-title',
@@ -1518,7 +1595,7 @@ function createApp () {
     bookPlayerPageGenerator.registerEvents({
         page: '#book-player',
         header: '.player-header',
-        player: {
+        controls: {
             container: '.player-controls',
             play: '.play',
             next: '.next',
