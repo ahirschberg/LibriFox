@@ -1,4 +1,4 @@
-describe('ChaptersListPageGenerator()', function () {
+describe('SearchedBookChaptersPageGenerator()', function () {
     "use strict";
     describe('#generatePage()', function () {
         var dlSpy, book_obj, cpg;
@@ -20,7 +20,7 @@ describe('ChaptersListPageGenerator()', function () {
             };
             dlSpy = sinon.spy(dlManager, 'downloadChapter');
 
-            cpg = new ChaptersListPageGenerator({
+            cpg = new SearchedBookChaptersPageGenerator({
                 httpRequestHandler: new StubHttpRequestHandler(),
                 selectors: {
                     list: '#chapters-list'

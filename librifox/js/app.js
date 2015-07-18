@@ -59,7 +59,7 @@ Chapter.parseFromXML = function (xml_string) {
     return chapters;
 };
 
-function ChaptersListPageGenerator(args) {
+function SearchedBookChaptersPageGenerator(args) {
     var that = this,
         httpRequestHandler = args.httpRequestHandler,
         selectors = args.selectors,
@@ -115,11 +115,11 @@ function ChaptersListPageGenerator(args) {
             if (book_ref) {
                 show_footer(book_ref);
             } else {
-            bookReferenceManager.loadJSONReference(book_id, function (obj) {
-                if (obj) {
-                    show_footer(obj);
-                }
-            });
+                bookReferenceManager.loadJSONReference(book_id, function (obj) {
+                    if (obj) {
+                        show_footer(obj);
+                    }
+                });
             }
         } else {
             console.log('showFooterAlert called, but the footer was already showing.  Doing nothing');
@@ -314,13 +314,14 @@ function BookReferenceManager(args) {
     
     this.obj_storage = obj_storage; // for testing
 
-    function strip_functions(obj) {
-        Object.keys(obj).forEach(function (key) {
-            if (typeof obj[key] === 'function') {
-                delete obj[key]
+    function strip_functions (obj) { // assumes only top layer has functions
+        var cloned_obj = jQuery.extend({}, obj);
+        Object.keys(cloned_obj).forEach(function (key) {
+            if (typeof cloned_obj[key] === 'function') {
+                delete cloned_obj[key]
             }
         });
-        return obj;
+        return cloned_obj;
     }
     
     function store_in_async (book_id, obj) {
@@ -432,6 +433,15 @@ function BookReferenceManager(args) {
         if (!book_ref) {
             return undefined;
         }
+        
+        console.log('trying to apply helper functions to ', JSON.parse(JSON.stringify(book_ref)));
+        if (typeof book_ref.hasHelperFunctions === 'function') {
+            console.log('book_ref already had helper functions, not reapplying.');
+            return book_ref;
+        }
+        
+        book_ref.hasHelperFunctions = function () {};
+        
         book_ref.eachChapter = function (each_fn) {
             Object.keys(book_ref).forEach(function (key) {
                 if (isValidIndex(key) && book_ref.hasOwnProperty(key)) {
@@ -1674,7 +1684,7 @@ function createApp () {
         storedChaptersPageGenerator = new StoredChaptersPageGenerator({
             player_data_handle: bookPlayerPageGenerator.getDataHandle(),
         }),
-        chaptersListGen = new ChaptersListPageGenerator({
+        searchedChaptersListGen = new SearchedBookChaptersPageGenerator({
             httpRequestHandler: httpRequestHandler,
             selectors: {
                 page: '#chaptersListPage',
@@ -1690,7 +1700,7 @@ function createApp () {
         searchResultsPageGenerator = new SearchResultsPageGenerator({
             httpRequestHandler: httpRequestHandler,
             results_selector: '#results-listing',
-            sr_chapters_data_handle: chaptersListGen.getDataHandle()
+            sr_chapters_data_handle: searchedChaptersListGen.getDataHandle()
         }),
         bookReferenceValidator = new BookReferenceValidator({
             referenceManager: bookReferenceManager,
@@ -1749,7 +1759,7 @@ function createApp () {
         search: "#books-search-bar",
         settings_popup: '#search-settings'
     });
-    chaptersListGen.registerEvents();
+    searchedChaptersListGen.registerEvents();
     settingsPageGenerator.registerEvents({
         page: '#mainSettings',
         folder_path_form: '#user-folder-form'
