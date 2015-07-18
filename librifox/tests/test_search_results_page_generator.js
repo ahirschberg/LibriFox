@@ -69,14 +69,6 @@ describe('SearchResultsPageGenerator()', function () {
             expect(secondBookText).match(/this is a description/);
         });
 
-        it('adds book-id attributes to each element in the selected parent', function () {
-            spg.displayResults('abc');
-
-            $('#bookSearchResults').children().each(function (i) {
-                expect($(this).attr('book-id')).equal(books_response[i].id + ''); // no == #equals() in expect()?? Why?
-            });
-        });
-
         it('displays a message if no books are found', function () {
             spg.displayResults('NORESULT');
 

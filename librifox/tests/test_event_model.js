@@ -86,7 +86,7 @@ describe('EventManager()', function () {
             expect(spy1).to.have.been.calledOnce;
             expect(spy2).to.not.have.been.called;
         })
-        it('removes all namespace events of any type if no type is provided', function () {
+        it('removes all namespace events of any type if eventName "*" is provided', function () {
             event_manager.registerEvents('explode', 'blow_up');
             var spy1 = sinon.spy(),
                 spy2 = sinon.spy(),
@@ -98,7 +98,7 @@ describe('EventManager()', function () {
             event_manager.on('blow_up', spy3);
             event_manager.on('blow_up.namespace', spy4);
             
-            event_manager.off('.namespace');
+            event_manager.off('*.namespace');
             
             event_manager.trigger('explode', 'my_args');
             event_manager.trigger('blow_up', 'my_args');
