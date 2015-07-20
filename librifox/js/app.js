@@ -21,8 +21,6 @@ function concatSelectors() {
     return args.join(' ');
 }
 
-
-
 function Book(args) {
     this.chapters = args.chapters;
 
@@ -326,7 +324,7 @@ function BookReferenceManager(args) {
     
     this.updateUserData = function (book_id, current_chapter_index, position) {
         that.loadBookReference(book_id, function (book_ref) {
-            book_ref['user_progress'] = {
+            book_ref[PlayerProgressManager.USER_PROGRESS_KEY] = {
                 current_chapter_index: current_chapter_index,
                 position: position
             }
@@ -769,7 +767,7 @@ function StoredBooksListPageGenerator(args) {
             console.warn('StoredBookPageGenerator: refreshList probably won\'t do anything: selectors is undefined');
         }
         var $list = $(selectors.list);
-        $list.children('li.stored-book').remove();
+        $list.children('li.stored-book').remove();        
         referenceManager.eachReference(function (obj) {
             createListItem(obj).bind('taphold', function () {
                 var that = this;
@@ -835,6 +833,16 @@ function StoredBookPageGenerator(args) {
             $(selectors.header_title).text(ui_state.book.title);
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
+            
+            var user_progress = ui_state.book[PlayerProgressManager.USER_PROGRESS_KEY];
+            if (user_progress.current_chapter_index >= 0) {
+                $('.continue-playback')
+                    .show()
+                    .click(function () {
+                        player_data_handle(ui_state.book, user_progress.current_chapter_index)
+                    });
+            }
+            
             ui_state.book.eachChapter(function (chapter_ref, index) {
                 createListItem(chapter_ref, index).bind('taphold', function () {
                     var that = this;
@@ -987,34 +995,35 @@ function PlayerProgressManager (args) {
     
     player.on('timeupdate', function () {
         if (player.position() - lastPosition >= 30) {
-            lastPosition = player.position();
             write();
         }
     });
     
     player.on('loadeddata', function () {
-        update();
+        write();
     });
     
-    player.on('finishedqueue', function () {
-       write(); 
+    player.on('finishedqueue', function (old_info) {
+        var info = {
+            book: old_info.book,
+            curr_index: -1
+        }
+        write(info);
     });
+    
+    var write = this.write = function (curr_info) { // curr_info is an optional argument
+        var curr_info = curr_info || player.getCurrentInfo();
+        lastPosition = player.position() || 0;
         
-    var update = this.update = function () {
-            lastPosition = player.position();
-            write();
-    }
-    
-    function write() {
-        var curr_info = player.getCurrentInfo();
         if (curr_info) {
             console.log('writing ', curr_info)
-            referenceManager.updateUserData(curr_info.book.id, curr_info.curr_index, player.position());
+            referenceManager.updateUserData(curr_info.book.id, curr_info.curr_index, lastPosition);
         } else {
             console.log('no player info, nothing to write.');
         }
     }
 }
+PlayerProgressManager.USER_PROGRESS_KEY = 'user_progress';
 
 function Player(args) {
     "use strict";
@@ -1096,8 +1105,9 @@ function Player(args) {
                 console.log('Ending playback, no chapter with index ' + (index + 1));
                 that.pause();
                 audio_element = undefined;
+                var old_queue_info = queue_info;
                 queue_info = undefined;
-                event_manager.trigger('finishedqueue');
+                event_manager.trigger('finishedqueue', old_queue_info);
             }
         } else {
             console.warn('Could not go to next track, nothing in queue.');
@@ -1137,7 +1147,7 @@ function Player(args) {
     
     this.position = function (desired_time) {
         if (arguments.length === 0) {
-            return audio_element.currentTime;
+            return audio_element ? audio_element.currentTime : NaN;
         } else {
             audio_element.currentTime = desired_time;
         }
