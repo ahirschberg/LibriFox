@@ -17,11 +17,11 @@ describe('BookStorageManager()', function () {
             }
         };
         var referenceMgrStub = {
-            storeJSONReference: function (a, b, c, options) {
+            storeChapterReference: function (a, b, c, options) {
                 options.reference_created();
             }
         };
-        referenceMgrSpy = sinon.spy(referenceMgrStub, 'storeJSONReference');
+        referenceMgrSpy = sinon.spy(referenceMgrStub, 'storeChapterReference');
         bsm = new BookStorageManager({
             deviceStoragesManager: deviceStoragesManager,
             referenceManager: referenceMgrStub

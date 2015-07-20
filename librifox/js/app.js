@@ -115,7 +115,7 @@ function SearchedBookPageGenerator(args) {
             if (book_ref) {
                 show_footer(book_ref);
             } else {
-                bookReferenceManager.loadJSONReference(book_id, function (obj) {
+                bookReferenceManager.loadBookReference(book_id, function (obj) {
                     if (obj) {
                         show_footer(obj);
                     }
@@ -265,7 +265,7 @@ function BookStorageManager(args) {
     this.writeChapter = function (blob, book_obj, chapter_obj, func_done) {
         var chPath = that.getChapterFilePath(book_obj.id, chapter_obj.index);
         that.write(blob, chPath, function (saved_path) {
-            referenceManager.storeJSONReference(book_obj, chapter_obj, saved_path, {
+            referenceManager.storeChapterReference(book_obj, chapter_obj, saved_path, {
                 reference_created: func_done
             });
         });
@@ -312,7 +312,7 @@ function BookReferenceManager(args) {
         JSON_PREFIX = this.JSON_PREFIX = 'bookid_',
         current_jobs = {};
     
-    this.obj_storage = obj_storage; // for testing
+    this.obj_storage = obj_storage; // for testing access
 
     function strip_functions (obj) { // assumes only top layer has functions
         var cloned_obj = jQuery.extend({}, obj);
@@ -324,32 +324,26 @@ function BookReferenceManager(args) {
         return cloned_obj;
     }
     
-    function store_in_async (book_id, obj) {
-        console.log('store_in_async called.')
-        var obj_to_store = strip_functions(obj);
-        async_storage.setItem(JSON_PREFIX + book_id, obj_to_store, function (transaction) {
-            console.log('wrote to asyncStorage:', obj_to_store);
-            var job = current_jobs[book_id];
-            console.log('job.when_done is', job.when_done)
-            var _when_done = job.when_done;
-            job.when_done = undefined;
-            _when_done && _when_done();
-            job.status = 'DONE';
-            console.log('DONE! job store is now ' + JSON.stringify(current_jobs))
+    this.updateUserData = function (book_id, current_chapter_index, position) {
+        that.loadBookReference(book_id, function (book_ref) {
+            book_ref['user_progress'] = {
+                current_chapter_index: current_chapter_index,
+                position: position
+            }
+            store_item(JSON_PREFIX + book_id, book_ref);
         });
     }
     
-    this.storeJSONReference = function (book_obj, chapter_obj, path, options) {
-        
+    this.storeChapterReference = function (book_obj, chapter_obj, path, options) {
         options = options || {}
         if (!isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
-        that.loadJSONReference(book_obj.id, function (obj) {
-            console.log('loadJSONReference callback evaluated');
+        that.loadBookReference(book_obj.id, function (obj) {
+            console.log('loadBookReference callback evaluated');
             var obj = obj || {};
             obj.title = obj.title || book_obj.title;
-            obj.id    = obj.id    || book_obj.id;
+            obj.id = obj.id || book_obj.id;
 
             if (!isValidIndex(chapter_obj.index)) {
                 throw new Error('chapter_obj.index is not a valid index: ' + chapter_obj.index);
@@ -358,31 +352,49 @@ function BookReferenceManager(args) {
                 path: path,
                 name: chapter_obj.name
             };
-            
-            var curr_job = current_jobs[book_obj.id];
-            if (curr_job && curr_job.status === 'WORKING') {
-                console.log('currently job store is busy: ' + JSON.stringify(current_jobs) + ' so when_done is being set.' );
-                curr_job.when_done = function () {
-                    console.log('when_done called for job store ' + JSON.stringify(current_jobs) + ' and chapter ', chapter_obj);
-                    store_in_async(book_obj.id, obj);
-                };
-            } else {
-                console.log('No current task for job store ' + JSON.stringify(current_jobs) + ', storing obj')
-                current_jobs[book_obj.id] = {
-                    status: 'WORKING', 
-                    when_done: undefined
-                };
-                store_in_async(book_obj.id, obj);
-            }
+
+            store_item(JSON_PREFIX + book_obj.id, obj);
             
             applyHelperFunctions(obj);
             obj_storage[JSON_PREFIX + book_obj.id] = obj;
-            
             options.reference_created && options.reference_created(obj);
         });
     };
+    
+    function store_item (key, item) {
+        var write_to_storage = function (key, item) {
+            console.log('store_in_async called.')
+            var obj_to_store = strip_functions(item);
+            async_storage.setItem(key, obj_to_store, function (transaction) {
+                console.log('wrote to asyncStorage:', obj_to_store);
+                var job = current_jobs[key];
+                console.log('job.when_done is', job.when_done)
+                var _when_done = job.when_done;
+                job.when_done = undefined;
+                _when_done && _when_done();
+                job.status = 'DONE';
+                console.log('DONE! job store is now ' + JSON.stringify(current_jobs))
+            });
+        },
+            curr_job = current_jobs[key];
+        
+        if (curr_job && curr_job.status === 'WORKING') {
+            console.log('currently job store is busy: ' + JSON.stringify(current_jobs) + ' so when_done is being set.');
+            curr_job.when_done = function () {
+                console.log('when_done called for job store ' + JSON.stringify(current_jobs) + ' and chapter ', chapter_obj);
+                write_to_storage(key, item);
+            };
+        } else {
+            console.log('No current task for job store ' + JSON.stringify(current_jobs) + ', storing obj')
+            current_jobs[key] = {
+                status: 'WORKING',
+                when_done: undefined
+            };
+            write_to_storage(key, item);
+        }
+    }
 
-    this.loadJSONReference = function (book_id, load_callback, prefix) {
+    this.loadBookReference = function (book_id, load_callback, prefix) {
         if (!prefix && prefix !== '') { // allow null prefix, but default to JSON_PREFIX. this is bad behavior :(
             prefix = JSON_PREFIX;
         }
@@ -408,7 +420,7 @@ function BookReferenceManager(args) {
             for (i = 0; i < length; i++) {
                 async_storage.key(i, function(key) {
                     if (key.startsWith(JSON_PREFIX)) {
-                        that.loadJSONReference(key, function (book_ref) {
+                        that.loadBookReference(key, function (book_ref) {
                             each_fn(book_ref);
                         }, '');
                     }
@@ -916,7 +928,10 @@ EventManager = (function () {
         var event_match = event_string.match(namespace_rxp),
             event_name = event_match[1],
             namespace  = event_match[2];
-        
+        if (!this.events[event_name]) {
+            console.error(event_name + ' is not a valid event. Valid events: ' + Object.keys(this.events).join(', '));
+            return;
+        }
         this.events[event_name].registerCallback({
             callback: callback,
             namespace: namespace
@@ -964,6 +979,43 @@ EventManager = (function () {
     return EventManager;
 })();
 
+function PlayerProgressManager (args) {
+    'use strict';
+    var lastPosition,
+        player = args.player,
+        referenceManager = args.referenceManager;
+    
+    player.on('timeupdate', function () {
+        if (player.position() - lastPosition >= 30) {
+            lastPosition = player.position();
+            write();
+        }
+    });
+    
+    player.on('loadeddata', function () {
+        update();
+    });
+    
+    player.on('finishedqueue', function () {
+       write(); 
+    });
+        
+    var update = this.update = function () {
+            lastPosition = player.position();
+            write();
+    }
+    
+    function write() {
+        var curr_info = player.getCurrentInfo();
+        if (curr_info) {
+            console.log('writing ', curr_info)
+            referenceManager.updateUserData(curr_info.book.id, curr_info.curr_index, player.position());
+        } else {
+            console.log('no player info, nothing to write.');
+        }
+    }
+}
+
 function Player(args) {
     "use strict";
     var audio_element,
@@ -975,14 +1027,14 @@ function Player(args) {
         that = this;
     
     function onMetadataLoad () {
-        event_manager.trigger('loadmetadata');
+        event_manager.trigger('loadedmetadata');
         player_options.load_metadata && player_options.load_metadata.apply(this, arguments);
     }
     function onLoad () {
         if (player_options.autoplay) {
             that.play();
         }
-        event_manager.trigger('loaddata');
+        event_manager.trigger('loadeddata');
         player_options.load_data && player_options.load_data.apply(this, arguments);
     }
     function onEnded () {
@@ -1003,7 +1055,7 @@ function Player(args) {
         alert(error_str);
     }
     
-    event_manager.registerEvents('loadmetadata', 'loaddata', 'play', 'pause', 'timeupdate', 'ended', 'finishedqueue');
+    event_manager.registerEvents('loadedmetadata', 'loadeddata', 'play', 'pause', 'timeupdate', 'ended', 'finishedqueue');
     
     this.on = function (eventName, callback) {
         event_manager.on(eventName, callback);
@@ -1121,8 +1173,8 @@ function Player(args) {
             seconds = remove_decimal(float_secs) % 60,
             arr = [];
         
-        hours && arr.push(stringify_two_digits(hours));
-        arr.push(stringify_two_digits(minutes));
+        hours && arr.push(hours);
+        arr.push(hours ? stringify_two_digits(minutes) : minutes);
         arr.push(stringify_two_digits(seconds));
         return arr.join(joiner);
     }
@@ -1205,7 +1257,7 @@ function BookPlayerPageGenerator(args) {
                 $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
             });
             
-            player.on('loaddata.player-html', function () {
+            player.on('loadeddata.player-html', function () {
                 updateUIandContext(selectors, controls);
             });
             
@@ -1681,6 +1733,10 @@ function createApp () {
         }),
         bookReferenceManager = new BookReferenceManager({
             asyncStorage: asyncStorage
+        }),
+        playerProgressManager = new PlayerProgressManager({
+            player: player,
+            referenceManager: bookReferenceManager
         }),
         bookStorageManager = new BookStorageManager({
             deviceStoragesManager: deviceStoragesManager,

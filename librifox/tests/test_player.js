@@ -79,14 +79,14 @@ describe('Player()', function () {
     
     describe('#prettifyTime()', function () {
         it('generates a display string from a given number of seconds', function () {
-            expect(p.prettifyTime(2.2)).to.equal('00:02');
-            expect(p.prettifyTime(59.9)).to.equal('00:59');
-            expect(p.prettifyTime(61)).to.equal('01:01');
-            expect(p.prettifyTime(7261)).to.equal('02:01:01');
+            expect(p.prettifyTime(2.2)).to.equal('0:02');
+            expect(p.prettifyTime(59.9)).to.equal('0:59');
+            expect(p.prettifyTime(61)).to.equal('1:01');
+            expect(p.prettifyTime(7261)).to.equal('2:01:01');
             expect(p.prettifyTime(363599)).to.equal('100:59:59');
         })
         it('allows a joiner string to be specified', function () {
-            expect(p.prettifyTime(7261, 'aaa')).to.equal('02aaa01aaa01');
+            expect(p.prettifyTime(7261, 'aaa')).to.equal('2aaa01aaa01');
         })
     })
 });
