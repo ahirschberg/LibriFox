@@ -790,7 +790,7 @@ function StoredBooksPageGenerator(args) {
         var link = $('<a/>', {
             'class': 'showFullText',
             text: book_obj.title,
-            href: 'stored_chapters.html',
+            href: 'stored_book.html',
             click: function () {
                 stored_chapters_data_handle(book_obj);
             }
@@ -853,7 +853,7 @@ function StoredChaptersPageGenerator(args) {
     function createListItem(chapter_ref, chapter_index) {
         var link = $('<a/>', {
             'class': 'showFullText',
-            href: 'book.html',
+            href: 'player.html',
             text: chapter_ref.name,
             click: function () {
                 player_data_handle(ui_state.book, chapter_index);
@@ -1165,7 +1165,7 @@ function BookPlayerPageGenerator(args) {
     this.registerEvents = function (selectors) {
         var page = selectors.page;
         $(document).on("pageshow", selectors.page, function (event) {
-            console.log('book.html page being generated...');
+            console.log('player.html page being generated...');
             if (!player_context.book || !isFinite(player_context.chapter_index) ) {
                 console.warn('Chapter index was undefined');
                 alert('You opened the player, but there is nothing to play.');
@@ -1547,7 +1547,7 @@ function SearchResultsPageGenerator(args) {
                     resultsCache[book.id] = book;
                     $('<li/>').html(
                         $('<a>')
-                            .attr('href', 'chapters.html')
+                            .attr('href', 'searched_book.html')
                             .append(
                                 $('<h2/>').text(book.title)
                             )
@@ -1687,8 +1687,8 @@ function createApp () {
         searchedChaptersListGen = new SearchedBookChaptersPageGenerator({
             httpRequestHandler: httpRequestHandler,
             selectors: {
-                page: '#chaptersListPage',
-                list: '#chaptersList',
+                page: '#searched-book-page',
+                list: '.searched-chapters-list',
                 book_title: '.book-title-disp',
                 book_description: '.book-desc-disp',
                 footer_alert: '#stored-chapters-shortcut-footer'
@@ -1735,9 +1735,9 @@ function createApp () {
         book_actions_popup: '#bookActionsMenu',
     });
     storedChaptersPageGenerator.registerEvents({
-        header_title: '.chapter-title',
+        header_title: '.book-title',
         list: '#stored-chapters-list',
-        page: '#storedChapters',
+        page: '#stored-book-page',
         book_actions_popup: '#chapterActionsMenu'
     });
     bookPlayerPageGenerator.registerEvents({
