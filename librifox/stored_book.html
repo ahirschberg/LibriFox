@@ -8,18 +8,21 @@
 </head>
 
 <body>
-    <div data-role="page" id="stored-book-page">
+    <div data-role="page" id="storedBookPage">
         <header data-role="header">
-            <h1 class="book-title">Book Title</h1>
+            <h1>Chapters</h1>
             <a data-rel="back" data-icon="back" data-iconpos="notext"></a>
         </header>
         <ul data-role="listview" id="stored-chapters-list">
-            <li>Chapters:</li>
+            <li>
+                <h2 class="book-title">BOOK TITLE</h2>
+            </li>
         </ul>
         <div data-role="popup" id="chapterActionsMenu" data-theme="b">
             <ul data-role="listview" data-inset="true" style="min-width:210px;">
                 <li data-role="list-divider">Choose an action</li>
-                <li><a href="#" class="delete_chapter">Delete</a></li>
+                <li><a href="#" class="delete_chapter">Delete</a>
+                </li>
             </ul>
         </div>
     </div>

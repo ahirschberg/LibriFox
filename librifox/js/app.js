@@ -59,7 +59,7 @@ Chapter.parseFromXML = function (xml_string) {
     return chapters;
 };
 
-function SearchedBookChaptersPageGenerator(args) {
+function SearchedBookPageGenerator(args) {
     var that = this,
         httpRequestHandler = args.httpRequestHandler,
         selectors = args.selectors,
@@ -719,7 +719,7 @@ function FilesystemBookReferenceManager(args) {
     }
 }
 
-function StoredBooksPageGenerator(args) {
+function StoredBooksListPageGenerator(args) {
     "use strict";
     var that = this,
         referenceManager = args.bookReferenceManager,
@@ -733,8 +733,8 @@ function StoredBooksPageGenerator(args) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
-        $(document).on('pageshow', selectors.page, function () {
-            console.log('pageshow called for ' + selectors.page);
+        $(document).on('pagebeforeshow', selectors.page, function () {
+            console.log('pagebeforeshow called for ' + selectors.page);
             that.refreshList();
             
             if (player.getCurrentInfo()) { // TODO use events to make this more robust
@@ -802,7 +802,7 @@ function StoredBooksPageGenerator(args) {
     }
 }
 
-function StoredChaptersPageGenerator(args) {
+function StoredBookPageGenerator(args) {
     'use strict';
     
     var that = this,
@@ -819,7 +819,7 @@ function StoredChaptersPageGenerator(args) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
-        $(document).on('pageshow', selectors.page, function () {
+        $(document).on('pagebeforeshow', selectors.page, function () {
             $(selectors.header_title).text(ui_state.book.title);
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
@@ -993,6 +993,15 @@ function Player(args) {
         event_manager.trigger('timeupdate');
         player_options.timeupdate && player_options.timeupdate.apply(this, arguments);
     }
+    function onError (e) {
+        var error_str =
+            'Error loading chapter "' +
+            that.getCurrentInfo().chapter.name +
+            '" with path ' + that.getCurrentInfo().chapter.path +
+            '. Is the file corrupted?'
+        console.error(error_str);
+        alert(error_str);
+    }
     
     event_manager.registerEvents('loadmetadata', 'loaddata', 'play', 'pause', 'timeupdate', 'ended', 'finishedqueue');
     
@@ -1027,8 +1036,10 @@ function Player(args) {
     this.next = function () {
         if (queue_info) {
             var index = queue_info.curr_index;
+            event_manager.trigger('ended');
             if (queue_info.book.hasOwnProperty(index + 1)) {
-                that.queueBook(queue_info.book, index + 1, player_options);
+                that.playFromPath(queue_info.book[index + 1].path, player_options);
+                queue_info.curr_index += 1;
             } else {
                 console.log('Ending playback, no chapter with index ' + (index + 1));
                 that.pause();
@@ -1046,6 +1057,7 @@ function Player(args) {
         fileManager.getFileFromPath(
             path,
             function (file) {
+                console.log(file.type, file);
                 getAudioElement().src = create_object_url_fn(file);
             }, 
             player_options.load_error
@@ -1128,6 +1140,7 @@ function Player(args) {
             audio_element.addEventListener('loadeddata', onLoad);
             audio_element.addEventListener('ended', onEnded);
             audio_element.addEventListener('timeupdate', onTimeUpdate);
+            audio_element.addEventListener('error', onError);
         }
         
         return audio_element
@@ -1149,7 +1162,7 @@ function Player(args) {
 
 function BookPlayerPageGenerator(args) {
     "use strict";
-    var player_context = {},
+    var player_context,
         fileManager = args.fileManager,
         player = args.player,
         that = this;
@@ -1164,23 +1177,26 @@ function BookPlayerPageGenerator(args) {
 
     this.registerEvents = function (selectors) {
         var page = selectors.page;
-        $(document).on("pageshow", selectors.page, function (event) {
+        $(document).on("pagebeforeshow", selectors.page, function (event) {
             console.log('player.html page being generated...');
-            if (!player_context.book || !isFinite(player_context.chapter_index) ) {
-                console.warn('Chapter index was undefined');
-                alert('You opened the player, but there is nothing to play.');
-                return false;
-            }
             
             var controls = selectors.controls;
             
-            if (!(player.getCurrentInfo() && // temporary, to make things a bit more usable
-                player.getCurrentInfo().book.id === player_context.book.id &&
-                player.getCurrentInfo().curr_index === player_context.chapter_index) ) {
-                
+            if (
+              !player.getCurrentInfo() ||   // if nothing is playing OR
+              ( player.getCurrentInfo() &&  // if thing playing doesn't match thing 
+                player_context &&           //   requested via player_context...
+                (
+                  player.getCurrentInfo().book.id !== player_context.book.id ||
+                  player.getCurrentInfo().curr_index !== player_context.chapter_index
+                )
+              )
+            ) {                             // then queue the book
                 player.queueBook(player_context.book, player_context.chapter_index);
+                player_context = undefined; // delete player context and use
+                                            // player.getCurrentInfo()
             }
-            
+
             updateUIandContext(selectors, controls);
             
             player.on('timeupdate.player-html', function () {
@@ -1203,9 +1219,9 @@ function BookPlayerPageGenerator(args) {
             });
             
             player.on('finishedqueue.player-html', function () {
-                alert('finished all chapters in queue');
                 $.mobile.back();
-            })
+                alert('finished all chapters in queue');
+            });
             
             var was_paused = true;
             $(concatSelectors(controls.container, controls.position)).on('slidestart', function () {
@@ -1238,8 +1254,6 @@ function BookPlayerPageGenerator(args) {
     function updateUIandContext (selectors, controls) {
         if (player.getCurrentInfo()) {
             $(selectors.header).text(player.getCurrentInfo().chapter.name);
-            player_context.book = player.getCurrentInfo().book;
-            player_context.chapter_index = player.getCurrentInfo().curr_index;
             
             player.position() && $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
             player.duration() && $(concatSelectors(controls.container, controls.duration_text)).text(player.prettifyTime(player.duration()));
@@ -1681,13 +1695,13 @@ function createApp () {
             fileManager: fileManager,
             player: player
         }),
-        storedChaptersPageGenerator = new StoredChaptersPageGenerator({
+        storedBookPageGenerator = new StoredBookPageGenerator({
             player_data_handle: bookPlayerPageGenerator.getDataHandle(),
         }),
-        searchedChaptersListGen = new SearchedBookChaptersPageGenerator({
+        searchedBookPageGenerator = new SearchedBookPageGenerator({
             httpRequestHandler: httpRequestHandler,
             selectors: {
-                page: '#searched-book-page',
+                page: '#searchedBookPage',
                 list: '.searched-chapters-list',
                 book_title: '.book-title-disp',
                 book_description: '.book-desc-disp',
@@ -1695,12 +1709,12 @@ function createApp () {
             },
             bookDownloadManager: bookDownloadManager,
             bookReferenceManager: bookReferenceManager,
-            stored_chapters_data_handle: storedChaptersPageGenerator.getDataHandle()
+            stored_chapters_data_handle: storedBookPageGenerator.getDataHandle()
         }),
         searchResultsPageGenerator = new SearchResultsPageGenerator({
             httpRequestHandler: httpRequestHandler,
             results_selector: '#results-listing',
-            sr_chapters_data_handle: searchedChaptersListGen.getDataHandle()
+            sr_chapters_data_handle: searchedBookPageGenerator.getDataHandle()
         }),
         bookReferenceValidator = new BookReferenceValidator({
             referenceManager: bookReferenceManager,
@@ -1710,10 +1724,10 @@ function createApp () {
             fileManager: fileManager,
             settings: settings
         }),
-        storedBooksPageGenerator = new StoredBooksPageGenerator({
+        storedBooksListPageGenerator = new StoredBooksListPageGenerator({
             bookReferenceManager: bookReferenceManager,
             fsBookReferenceManager: fsBookReferenceManager,
-            stored_chapters_data_handle: storedChaptersPageGenerator.getDataHandle(),
+            stored_chapters_data_handle: storedBookPageGenerator.getDataHandle(),
             player: player
         }),
         settingsPageGenerator = new SettingsPageGenerator({
@@ -1726,22 +1740,22 @@ function createApp () {
     bookReferenceValidator.validateMetadata(function (invalid_paths) {
         console.log(invalid_paths);
         alert('Warning: the following files were not retrieved ' + invalid_paths.join(', '));
-        storedBooksPageGenerator.refreshList();
+        storedBooksListPageGenerator.refreshList();
     });
     fsBookReferenceManager.findAllChapters();
-    storedBooksPageGenerator.registerEvents({
+    storedBooksListPageGenerator.registerEvents({
         list: '#stored-books-list',
-        page: '#storedBooks',
+        page: '#storedBooksList',
         book_actions_popup: '#bookActionsMenu',
     });
-    storedChaptersPageGenerator.registerEvents({
+    storedBookPageGenerator.registerEvents({
         header_title: '.book-title',
         list: '#stored-chapters-list',
-        page: '#stored-book-page',
+        page: '#storedBookPage',
         book_actions_popup: '#chapterActionsMenu'
     });
     bookPlayerPageGenerator.registerEvents({
-        page: '#book-player',
+        page: '#bookPlayer',
         header: '.player-header',
         controls: {
             container: '.player-controls',
@@ -1759,13 +1773,13 @@ function createApp () {
         search: "#books-search-bar",
         settings_popup: '#search-settings'
     });
-    searchedChaptersListGen.registerEvents();
+    searchedBookPageGenerator.registerEvents();
     settingsPageGenerator.registerEvents({
         page: '#mainSettings',
         folder_path_form: '#user-folder-form'
     });
 
-    $(document).on("pageshow", "#homeFileManager", function () {
+    $(document).on("pagebeforeshow", "#homeFileManager", function () {
         $('#deleteAll').click(function () {
             fileManager.deleteAllAppFiles();
             asyncStorage.clear(); // remove references
