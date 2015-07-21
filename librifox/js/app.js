@@ -379,7 +379,7 @@ function BookReferenceManager(args) {
         if (curr_job && curr_job.status === 'WORKING') {
             console.log('currently job store is busy: ' + JSON.stringify(current_jobs) + ' so when_done is being set.');
             curr_job.when_done = function () {
-                console.log('when_done called for job store ' + JSON.stringify(current_jobs) + ' and chapter ', chapter_obj);
+                console.log('when_done called for job store ' + JSON.stringify(current_jobs) + ' and item ', item);
                 write_to_storage(key, item);
             };
         } else {
@@ -835,11 +835,11 @@ function StoredBookPageGenerator(args) {
             $list.children('li.stored-chapter').remove();
             
             var user_progress = ui_state.book[PlayerProgressManager.USER_PROGRESS_KEY];
-            if (user_progress.current_chapter_index >= 0) {
+            if (user_progress && user_progress.current_chapter_index >= 0) {
                 $('.continue-playback')
                     .show()
                     .click(function () {
-                        player_data_handle(ui_state.book, user_progress.current_chapter_index)
+                        player_data_handle(ui_state.book, user_progress.current_chapter_index, user_progress.position)
                     });
             }
             
@@ -987,15 +987,20 @@ EventManager = (function () {
     return EventManager;
 })();
 
-// FIXME
 function PlayerProgressManager (args) {
     'use strict';
-    var lastPosition,
+    var lastPosition = 0,
         player = args.player,
         referenceManager = args.referenceManager;
     
     player.on('timeupdate', function () {
-        if (player.position() - lastPosition >= 30) {
+        if ( Math.abs(player.position() - lastPosition) >= 30) {
+            write();
+        }
+    });
+    
+    player.on('pause', function () {
+        if (Math.abs(player.position() - lastPosition) >= 1) {
             write();
         }
     });
@@ -1005,14 +1010,14 @@ function PlayerProgressManager (args) {
     });
     
     player.on('finishedqueue', function (old_info) {
-        var info = {
+        var user_progress = {
             book: old_info.book,
             curr_index: -1
-        }
-        write(info);
+        };
+        write(user_progress);
     });
     
-    var write = this.write = function (curr_info) { // curr_info is an optional argument
+    var write = function (curr_info) { // curr_info is an optional argument
         var curr_info = curr_info || player.getCurrentInfo();
         lastPosition = player.position() || 0;
         
@@ -1043,6 +1048,10 @@ function Player(args) {
     function onLoad () {
         if (player_options.autoplay) {
             that.play();
+        }
+        if (isFinite(player_options.desired_position) && player_options.desired_position >= 0) {
+            that.position(player_options.desired_position);
+            delete player_options.desired_position;
         }
         event_manager.trigger('loadeddata');
         player_options.load_data && player_options.load_data.apply(this, arguments);
@@ -1123,7 +1132,7 @@ function Player(args) {
                 console.log(file.type, file);
                 getAudioElement().src = create_object_url_fn(file);
             }, 
-            player_options.load_error
+            onError
         );
     }
     
@@ -1231,10 +1240,11 @@ function BookPlayerPageGenerator(args) {
         that = this;
     
     this.getDataHandle = function () {
-        return function (curr_book, chapter_index) {
+        return function (curr_book, chapter_index, position) {
             player_context = {};
             player_context.book = curr_book;
             player_context.chapter_index = chapter_index;
+            player_context.position = position;
         }
     }
 
@@ -1255,7 +1265,11 @@ function BookPlayerPageGenerator(args) {
                 )
               )
             ) {                             // then queue the book
-                player.queueBook(player_context.book, player_context.chapter_index);
+                var options;
+                if (player_context.position) {
+                    options = {desired_position: player_context.position};
+                }
+                player.queueBook(player_context.book, player_context.chapter_index, options);
                 player_context = undefined; // delete player context and use
                                             // player.getCurrentInfo()
             }
@@ -1857,8 +1871,22 @@ function createApp () {
     _player = player;
 }
 
-/*var db = new MediaDB("sdcard", undefined);
+/*var db = new MediaDB("sdcard", undefined, {includeFilter: /[^\.]+.lfa$/, version: 1});
 db.addEventListener('ready', function () {
     db.enumerate(debug_print_cbk);
 });
-*/
+function deletemdb () {
+    if (db) {
+        db.close();
+    }
+    var req = indexedDB.deleteDatabase('MediaDB/sdcard/');
+    req.onsuccess = function () {
+        console.log("Deleted database successfully");
+    };
+    req.onerror = function () {
+        console.log("Couldn't delete database");
+    };
+    req.onblocked = function () {
+        console.log("Couldn't delete database due to the operation being blocked");
+    };
+}*/

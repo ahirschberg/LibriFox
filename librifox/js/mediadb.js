@@ -400,6 +400,10 @@ var MediaDB = (function() {
       // only regular expression object is accepted.
       this.clientExcludeFilter = options.excludeFilter;
     }
+      
+    if (options.includeFilter && (options.includeFilter instanceof RegExp)) { // LibriFox Patch
+        this.clientIncludeFilter = options.includeFilter;
+    }
 
     // While scanning, we attempt to send change events in batches.
     // After finding a new or deleted file, we'll wait this long before
@@ -1424,6 +1428,8 @@ var MediaDB = (function() {
   // Bug https://bugzilla.mozilla.org/show_bug.cgi?id=838179
   function ignoreName(media, filename) {
     if (media.clientExcludeFilter && media.clientExcludeFilter.test(filename)) {
+      return true;
+    } else if (media.clientIncludeFilter && !media.clientIncludeFilter.test(filename)){ // LibriFox Patch
       return true;
     } else {
       var path = filename.substring(0, filename.lastIndexOf('/') + 1);
