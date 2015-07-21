@@ -626,7 +626,19 @@ function FilesystemBookReferenceManager(args) {
                     enumerate_path: user_audio_folder,
                     match: /.*\.lfa/,
                     func_each: function (result) {
-                        id3(result, function (err, tags) {
+                        LazyLoader.load(
+                            ['js/libs/blobview.js', 'js/libs/id3v1.js', 'js/libs/id3v2.js'],
+                            function () {
+                                BlobView.get(result, 0, result.size, function (bv) {
+                                    if(bv.getASCIIText(0, 3) === 'ID3') {
+                                        var id3_promise = ID3v2Metadata.parse(bv);
+                                        id3_promise.then(function () {
+                                            console.log(arguments);
+                                        })
+                                    }
+                                });
+                            });
+                        /*id3(result, function (err, tags) {
                             var book_result = addBook(tags, result.name);
                             if (book_result.isNew) {
                                 if (each_book_callback) {
@@ -634,7 +646,7 @@ function FilesystemBookReferenceManager(args) {
                                 }
                             }
                             passed_in_func_each && passed_in_func_each();
-                        });
+                        });*/
                     }
                 });
             }
