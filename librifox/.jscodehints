@@ -1,0 +1,6 @@
+{
+     "excluded-directories" : ["jquerymobile", "node_modules"],
+     "excluded-files" : ["jquery*.js", "/lib-1.[12].js/"],  
+     "max-file-count": 100,
+     "max-file-size": 524288
+}
