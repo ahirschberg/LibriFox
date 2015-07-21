@@ -979,6 +979,7 @@ EventManager = (function () {
     return EventManager;
 })();
 
+// FIXME
 function PlayerProgressManager (args) {
     'use strict';
     var lastPosition,
@@ -1001,8 +1002,8 @@ function PlayerProgressManager (args) {
     });
         
     var update = this.update = function () {
-            lastPosition = player.position();
-            write();
+        lastPosition = player.position();
+        write();
     }
     
     function write() {
