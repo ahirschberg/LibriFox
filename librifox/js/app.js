@@ -9,6 +9,8 @@ window.oncontextmenu = function(event) {
      return false;
 };
 
+var APP_DOWNLOADS_DIR = 'librifox/app_dl';
+
 // some utility methods, should probably be moved into their own classes
 function stripHTMLTags(str) {
     return str.replace(/<(?:.|\n)*?>/gm, '');
@@ -136,26 +138,28 @@ function SearchedBookPageGenerator(args) {
     };
 
     function showLocalChapters(book) {
-        // Removed until there is a solution for the async storage problem
+        var num_chapters = 0;
+        var get_num_chapters = (() => num_chapters);
         var $dl_all = $('<li/>', {
             html: $('<a/>', {
-                text: 'Download all chapters (WIP)'
+                text: 'Download all chapters'
             }),
             click: function () {
                 var that = this;
-                $(that).unbind('click');
-                
-                book.chapters.forEach(function (chapter) {
+                if (confirm('You are about to download ' + get_num_chapters() + ' chapters. Data usage may apply. Are you sure?')) {
+                    book.chapters.forEach(function (chapter) {
                         var chapter_list_element = $('[chapter-index="' + chapter.index + '"]');
                         downloadChapterWithCbk(book, chapter, chapter_list_element);
-                });
+                    });
+                }
             }
         }).attr('data-icon', 'arrow-d');
         $dl_all.append(PROGRESSBAR_HTML);
         
         $(selectors.list).append($dl_all);
-        $.each(book.chapters, function (index, chapter) {
-            generateChapterListItem(book, chapter, this);
+        book.chapters.forEach(function (chapter) {
+            generateChapterListItem(book, chapter);
+            num_chapters += 1;
         });
         $(selectors.list).listview('refresh');
     };
@@ -178,7 +182,6 @@ function SearchedBookPageGenerator(args) {
     }
     
     function downloadChapterWithCbk(book, chapter, that) {
-        $(that).unbind('click');
         return bookDownloadManager.downloadChapter(
             book,
             chapter,
@@ -230,10 +233,11 @@ function BookDownloadManager(args) {
     this.downloadChapter = function (book_obj, chapter_obj, progress_callback, finished_callback) {
         // assumes that #writeChapter will always write following this pattern, which could cause problems
         var filepath = storageManager.getChapterFilePath(book_obj.id, chapter_obj.index);
-        fileManager.tryWriteFile(
+        fileManager.testForFile(
             filepath,
-            function (writeable, request) {
-                if (writeable) {
+            function (exists) {
+                console.log(filepath, exists);
+                if (!exists) {
                     downloadFile(
                         chapter_obj.url,
                         function (response) {
@@ -242,9 +246,13 @@ function BookDownloadManager(args) {
                         progress_callback
                     );
                 } else {
-                    console.warn('tried and failed to write to path ' + filepath + ' with error',
-                                 request.error);
-                    alert('Error: could not write to file. ' + request.error.name);
+                    console.warn('The file at ' + filepath + ' already exists.');
+                    if (confirm('The file you are trying to download already exists. Delete the old version? ') ) {
+                        fileManager.deleteFile(filepath).then(() => {
+                            // make this non-recursive?
+                            that.downloadChapter(book_obj, chapter_obj, progress_callback, finished_callback);
+                        }).catch(e => {throw e});
+                    }
                 }
             }
         );
@@ -284,27 +292,15 @@ function BookStorageManager(args) {
         }
     };
     
-    this.delete = function (path, success_fn, error_fn) {
-        var request = deviceStoragesManager.getSDCard().delete(path);
-        request.onsuccess = function () {
-            console.log("File deleted: " + path);
-            success_fn && success_fn();
-        };
-        request.onerror = function () {
-            console.log("Unable to delete the file at " + path, this.error);
-            error_fn && error_fn(this.error);
-        };
-    };
-
     this.getChapterFilePath = function (book_id, chapter_index) {
-        return 'librifox/' + book_id + '/' + chapter_index + '.lfa';
+        return APP_DOWNLOADS_DIR + '/' + book_id + '/' + chapter_index + '.lfa';
     };
 }
 
 function BookReferenceManager(args) {
     var args = args || {},
         async_storage = args.asyncStorage,
-        storageManager,
+        fileManager = args.fileManager,
         obj_storage = {},
         that = this,
         JSON_PREFIX = this.JSON_PREFIX = 'bookid_',
@@ -363,6 +359,7 @@ function BookReferenceManager(args) {
         var write_to_storage = function (key, item) {
             console.log('store_in_async called.')
             var obj_to_store = strip_functions(item);
+            console.log('storing ', obj_to_store);
             async_storage.setItem(key, obj_to_store, function (transaction) {
                 console.log('wrote to asyncStorage:', obj_to_store);
                 var job = current_jobs[key];
@@ -434,10 +431,6 @@ function BookReferenceManager(args) {
             });
         });
     }
-    
-    this.registerStorageManager = function (_storageManager) {
-        storageManager = _storageManager;
-    };
 
     function applyHelperFunctions(book_ref) {
         if (!book_ref) {
@@ -475,21 +468,21 @@ function BookReferenceManager(args) {
         };
         book_ref.deleteChapter = function (index, success_fn) {
             var this_book_ref = this;
-            storageManager.delete(
-                this_book_ref[index].path,
-                function () {
+            fileManager.deleteFile(this_book_ref[index].path)
+                .then(function () {
                     delete this_book_ref[index];
                     var key = JSON_PREFIX + this_book_ref.id;
                     if (this_book_ref.numChapters() === 0) {
                         remove_book_from_references(this_book_ref.id);
                     } else {
                         obj_storage[key] = this_book_ref;
-                        async_storage.setItem(key, this_book_ref);
+                        
+                        store_item(key, this_book_ref);
                     }
                     success_fn && success_fn();
 
-                },
-                function (err) {
+                })
+                .catch(function (err) {
                     alert('Error deleting chapter with index ' + index + '. ' + err.name)
                 });
         };
@@ -515,7 +508,7 @@ function BookReferenceManager(args) {
                         } else {
                             console.warn('Unable to fully remove book "' + this_book_ref.title + '". Errors were encountered when attempting to delete files.');
                             obj_storage[JSON_PREFIX + this_book_ref.id] = undefined;
-                            async_storage.setItem(JSON_PREFIX + this_book_ref.id, this_book_ref);
+                            store_item(JSON_PREFIX + this_book_ref.id, this_book_ref);
 
                             error_fn && error_fn();
                         }
@@ -523,18 +516,15 @@ function BookReferenceManager(args) {
                 };
             if (num_chapters > 0) {
                 this_book_ref.eachChapter(function (chapter, index) {
-                    storageManager.delete(
-                        chapter.path,
-                        function () {
+                    fileManager.deleteFile(chapter.path)
+                        .then(() => {
                             delete this_book_ref[index];
                             finalize_deletions_if_ready();
-                        },
-                        function (err) {
+                        }).catch(err => {
                             console.error('Error deleting chapter with index ' + index + '. ' + err.name);
                             errors = true;
                             finalize_deletions_if_ready();
-                        }
-                    );
+                        });
                 });
             } else {
                 finalize_deletions_if_ready();
@@ -591,11 +581,164 @@ function BookReferenceValidator(args) {
     };
 }
 
+
+ID3Parser = (function () {
+    // Hey, when I wrote this I was learning promises for the first time!
+    // I read the A+ specification, and it seems like promises that don't chain
+    // or return a value should use #done instead of #then.  But then I read some
+    // other stuff saying #done isn't necessary. I ended up sticking with #then.
+    
+    // snippets and concepts from
+    // https://github.com/mozilla-b2g/gaia/blob/27799d17c1e00ac4735088d083fdf25d5f460b13/apps/music/js/metadata/formats.js#L24-L67
+    var parsers = [
+        {
+            file: 'js/lib/id3v1.js',
+            get module() { return ID3v1Metadata; },
+            test: function (header) {
+                return (header.getUint16(0, false) & 0xFFFE) === 0xFFFA;
+            }
+        },
+        {
+            file: 'js/lib/id3v2.js',
+            get module() { return ID3v2Metadata; },
+            test: function (header) {
+                return header.getASCIIText(0, 3) === 'ID3';
+            }
+        }
+    ];
+    
+    function findParser (blobview) {
+        for (var i = 0; i < parsers.length; i++) {
+            if (parsers[i].test(blobview)) {
+                return LazyLoader.load(parsers[i].file).then(function () {
+                    return parsers[i].module;
+                });
+            }
+        }
+        return Promise.reject('could not parse metadata');
+    }
+    
+    // snippets and concepts from
+    // https://github.com/mozilla-b2g/gaia/blob/9dfedd7d35da00fa9b08dcffc3ab4f47da54e4f0/apps/music/js/metadata/core.js#L52-L83
+    function parse (blob) {
+        // according to mozilla metadata core.js, anything smaller than this cannot be a media file.
+        if (blob.size < 128) {
+          return Promise.reject('file is empty or too small');
+        }
+        return new Promise((resolve, reject) => {
+            LazyLoader.load('js/lib/blobview.js').then(() => {
+                var size = Math.min(6 * 1024, blob.size);
+                BlobView.get(blob, 0, size, function (blobview, error) {
+                    if (error) {
+                        reject(error);
+                        return;
+                    }
+                    findParser(blobview).then(function (parser) {
+                        var promise;
+                        promise = parser.parse(blobview);
+
+                        resolve(promise.then(function (metadata) {
+                            return addDefaultMetadata(metadata || {}, blob.name);
+                        }))
+                    }).catch(e => {
+                        reject(e)
+                    });
+                });
+            }).catch(e => {
+                console.error('ID3Parser.parse: ', e, e.stack);
+                reject(e);
+            });
+        });
+    }
+    
+    function getMediaDBMetadataParser() {
+        return function (blob, success, fail) {
+            parse(blob).then((metadata) => {
+                console.log(metadata);
+                success(metadata)
+            }).catch((metadata) => {fail(metadata)});
+        }
+    }
+    
+    /**
+     * Fill in any default metadata fields, such as a fallback for the title, and
+     * the rating/playcount.
+     *
+     * @param {Object} metadata The metadata from one of our parsers.
+     * @param {String} filename The name of the underlying file, if any.
+     * @return {Object} The updated metdata object.
+     */
+    function addDefaultMetadata(metadata, filename) {
+        if (!metadata.artist) {
+            metadata.artist = '';
+        }
+        if (!metadata.album) {
+            metadata.album = '';
+        }
+        if (!metadata.title) {
+            // If the blob has a name, use that as a default title in case
+            // we can't find one in the file
+            if (filename) {
+                var p1 = filename.lastIndexOf('/');
+                var p2 = filename.lastIndexOf('.');
+                if (p2 <= p1) {
+                    p2 = filename.length;
+                }
+                metadata.title = filename.substring(p1 + 1, p2);
+            } else {
+                metadata.title = '';
+            }
+        }
+
+        metadata.rated = metadata.played = 0;
+        return metadata;
+    }
+    
+    return {
+        parse: parse,
+        getMediaDBMetadataParser: getMediaDBMetadataParser
+    };
+})();
+
+//var db = new MediaDB("sdcard", ID3Parser.getMediaDBMetadataParser(), {includeFilter: /[^\.]+\.lfa$/, version: 1});
+
+var MediaManager = (function () {
+    var db;
+    function MediaManager(mediadb) {
+        db = mediadb;
+    }
+    
+    MediaManager.prototype.enumerate = function (callback) {
+        db.enumerate((item) => {
+            console.log(item);
+        });
+    }
+    
+    MediaManager.prototype.deleteDatabase = function () {
+        var name = db.dbname;
+        db.close();
+        
+        var req = indexedDB.deleteDatabase(name);
+        req.onsuccess = function () {
+            console.log("Deleted database successfully");
+        };
+        req.onerror = function () {
+            console.log("Couldn't delete database");
+        };
+        req.onblocked = function () {
+            console.log("Couldn't delete database due to the operation being blocked");
+        };
+    }
+    
+    return MediaManager;
+})();
+
 function FilesystemBookReferenceManager(args) {
     'use strict';
     
     var fileManager = args.fileManager,
         settings = args.settings,
+        mediaDB = args.mediaDB,
         each_book_callback,
         books = this.books = (function () {
             var books_store = {};
@@ -615,43 +758,10 @@ function FilesystemBookReferenceManager(args) {
                         func_each.apply(this, arguments);
                     });
                 },
+                clear: function () {books_store = {}; untitled = []},
                 store: books_store // temp
             };
         })();
-
-    this.findAllChapters = function (passed_in_func_each) {
-        settings.getAsync('user_folder', function (user_audio_folder) {
-            if (user_audio_folder) {
-                fileManager.enumerateFiles({
-                    enumerate_path: user_audio_folder,
-                    match: /.*\.lfa/,
-                    func_each: function (result) {
-                        LazyLoader.load(
-                            ['js/libs/blobview.js', 'js/libs/id3v1.js', 'js/libs/id3v2.js'],
-                            function () {
-                                BlobView.get(result, 0, result.size, function (bv) {
-                                    if(bv.getASCIIText(0, 3) === 'ID3') {
-                                        var id3_promise = ID3v2Metadata.parse(bv);
-                                        id3_promise.then(function () {
-                                            console.log(arguments);
-                                        })
-                                    }
-                                });
-                            });
-                        /*id3(result, function (err, tags) {
-                            var book_result = addBook(tags, result.name);
-                            if (book_result.isNew) {
-                                if (each_book_callback) {
-                                    each_book_callback(book_result.book);
-                                }
-                            }
-                            passed_in_func_each && passed_in_func_each();
-                        });*/
-                    }
-                });
-            }
-        });
-    };
     
     this.setCallback = function (each_book) {
         books.eachReference(function (book) { // in case books are parsed before callback is set
@@ -665,49 +775,27 @@ function FilesystemBookReferenceManager(args) {
         books.eachReference(func_each);
     };
     
-    function addBook(id3_tags, chapterPath) {
-        var track_num = parseInt(stripNullCharacter( // dear lord clean this up
-            ( id3_tags.v1.track ||
-              (id3_tags.v2.track && id3_tags.v2.track.match(/(\d+)\/\d+/)[1]) || // If the string is in format track#/total#, parse out track#
-              id3_tags.v2.track ) ),
-            10),
-            book_name = stripNullCharacter(id3_tags.album),
-            chapter_name = stripNullCharacter(id3_tags.title),
-            obj = books.getBook(book_name),
-            isNew = false;
-
-        if (!obj) {
-            obj = {};
-            isNew = true;
-        }
+    this.updateReferences = function () {
+        books.clear();
+        mediaDB.enumerate((listing) => {
+            var metadata = listing.metadata,
+                album = metadata.album,
+                artist = metadata.artist;
+            if (album) {
+                var book_ref = books.getBook(metadata.album);
+                if (!book_ref) {
+                    book_ref = {
+                        title: album,
+                        author: artist
+                    };
+                }
+                //book_ref[]
+            }
+        })
+    }
+    
+    function createBookRefFromMediaListing(media_listing) {
         
-        var chapters = obj.chapters || {},
-            ch_obj = {
-                path: chapterPath,
-                name: chapter_name || getNameFromPath(chapterPath)
-            };
-        
-        var unindexed = chapters.unindexed || [];
-        if (track_num) {
-            chapters[track_num] = ch_obj;
-        } else {
-            unindexed.push(ch_obj);
-        }
-        chapters.unindexed = unindexed;
-
-        obj.chapters = chapters;
-        obj.title = book_name;
-        applyHelperFunctions(obj);
-        
-        if (book_name) {
-            books.setBook(book_name, obj);
-        } else {
-            console.warn('Could not get book name for file at ' + chapterPath);
-            obj.title = 'Untitled Book';
-            books.untitled.push(obj);
-        }
-        
-        return {book: obj, isNew: isNew};
     }
     
     function applyHelperFunctions (book_ref) {
@@ -723,21 +811,6 @@ function FilesystemBookReferenceManager(args) {
         };
         
         return book_ref;
-    }
-    
-    function stripNullCharacter(str) {
-        if (str && str.replace) {
-            return str.replace(/\u0000/g, ''); // some of the ID3 tags have null character, strip those out
-        } else {
-            return str;
-        }
-    }
-    function getNameFromPath(path_str) {
-        var match = path_str.match(/.*\/(.*)$/);
-        return match && match[1];
-    }
-    function isValidIndex(index) { // also duplicated! needs fix!
-        return /^\d+$/.test(index)
     }
 }
 
@@ -1512,7 +1585,7 @@ function FileManager(storage_device) {
 
         $("#downloadedFiles").empty();
         that.enumerateFiles({
-            enumerate_path: 'librifox',
+            enumerate_path: APP_DOWNLOADS_DIR,
             func_each: enumeration_cb,
             func_done: done_cb,
         });
@@ -1555,21 +1628,22 @@ function FileManager(storage_device) {
         }
         
     };
-    
-    this.tryWriteFile = function (path, result_callback) {
-        var req = that.addFile(new Blob([''], {'type': 'text/plain'}), path);
-        req.onsuccess = function () {
-            storage_device.delete(path);
-            result_callback(true, this);
-        }
-        req.onerror = function () {
-            result_callback(false, this);
-        }
-    };
 
     this.addFile = function (blob, filepath) {
         return storage_device.addNamed(blob, filepath);
     };
+    
+    this.deleteFile = function (filepath) {
+        return new Promise(function (resolve, reject) {
+            var req = storage_device.delete(filepath);
+            req.onsuccess = function () {
+                resolve.apply(this, arguments);
+            }
+            req.onerror = function () {
+                reject.apply(this, arguments);
+            }
+        });
+    }
     
     this.deleteAllAppFiles = function () {
         var enumeration_cb = function (result) {
@@ -1585,7 +1659,7 @@ function FileManager(storage_device) {
             }
         }
         that.enumerateFiles({
-            match: /librifox\/.*/,
+            match: new RegExp(APP_DOWNLOADS_DIR + "\/.*"),
             func_each: enumeration_cb,
             func_done: function () {
                 that.displayAppFiles();
@@ -1769,7 +1843,8 @@ function createApp () {
             settings: settings    
         }),
         bookReferenceManager = new BookReferenceManager({
-            asyncStorage: asyncStorage
+            asyncStorage: asyncStorage,
+            fileManager: fileManager
         }),
         playerProgressManager = new PlayerProgressManager({
             player: player,
@@ -1828,14 +1903,13 @@ function createApp () {
             deviceStoragesManager: deviceStoragesManager
         });
 
-    bookReferenceManager.registerStorageManager(bookStorageManager);
     bookReferenceValidator.registerEvents(lf_getDeviceStorage());
     bookReferenceValidator.validateMetadata(function (invalid_paths) {
         console.log(invalid_paths);
         alert('Warning: the following files were not retrieved ' + invalid_paths.join(', '));
         storedBooksListPageGenerator.refreshList();
     });
-    fsBookReferenceManager.findAllChapters();
+    //fsBookReferenceManager.findAllChapters();
     storedBooksListPageGenerator.registerEvents({
         list: '#stored-books-list',
         page: '#storedBooksList',
@@ -1882,23 +1956,3 @@ function createApp () {
     
     _player = player;
 }
-
-/*var db = new MediaDB("sdcard", undefined, {includeFilter: /[^\.]+.lfa$/, version: 1});
-db.addEventListener('ready', function () {
-    db.enumerate(debug_print_cbk);
-});
-function deletemdb () {
-    if (db) {
-        db.close();
-    }
-    var req = indexedDB.deleteDatabase('MediaDB/sdcard/');
-    req.onsuccess = function () {
-        console.log("Deleted database successfully");
-    };
-    req.onerror = function () {
-        console.log("Couldn't delete database");
-    };
-    req.onblocked = function () {
-        console.log("Couldn't delete database due to the operation being blocked");
-    };
-}*/
