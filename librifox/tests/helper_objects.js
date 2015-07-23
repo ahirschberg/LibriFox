@@ -55,8 +55,9 @@ var createFakeAsyncStorage = function () {
                 callbacks.push(func);
             }
         },
-        setItem: function (key, value) {
+        setItem: function (key, value, callback) {
             fake_store[key] = value;
+            callback && callback();
         },
         removeItem: function (key, callback) {
             delete fake_store[key];
@@ -91,3 +92,5 @@ var createFakeAsyncStorage = function () {
         }
     };
 };
+
+PROMISE_CATCH = (e => console.error(e.message + '\n\n', e.stack));

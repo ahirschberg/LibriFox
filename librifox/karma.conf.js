@@ -19,12 +19,15 @@ module.exports = function(config) {
       'jquerymobile/jquery.mobile-1.4.5.min.js',
       'js/*.js',
       'tests/*.js'
+      //'tests/helper_objects.js',
+      //'tests/test_book_download_manager.js'
     ],
 
 
     // list of files to exclude
     exclude: [
-        'js/load_error.js'
+        'js/load_error.js',
+        'tests/test_filesystem_book_reference_manager.js'
     ],
 
 
@@ -37,7 +40,7 @@ module.exports = function(config) {
     // test results reporter to use
     // possible values: 'dots', 'progress'
     // available reporters: https://npmjs.org/browse/keyword/karma-reporter
-    reporters: ['progress'],
+    reporters: ['dots'],
 
 
     // web server port
@@ -54,7 +57,7 @@ module.exports = function(config) {
 
 
     // enable / disable watching file and executing tests whenever any file changes
-    autoWatch: false,
+    autoWatch: true,
 
 
     // start these browsers

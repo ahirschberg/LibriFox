@@ -36,11 +36,11 @@ describe('BookStorageManager()', function () {
 
     describe('#writeChapter()', function () {
         it('should generate chapter path via #getChapterFilePath and write to file system', function () {
-            storageMock.expects('addFile').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/1234/0.lfa');
+            storageMock.expects('addFile').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/app_dl/1234/0.lfa');
             bsm.writeChapter(WEB_RESP.audio_blob, BOOK_OBJECT, CHAPTER_OBJECT);
             storageMock.verify();
         });
-        it('should call referenceManager#storeJSONReference with args', function (done) {
+        it('should call referenceManager#storeChapterReference with args', function (done) {
             bsm.writeChapter(WEB_RESP.audio_blob, BOOK_OBJECT, CHAPTER_OBJECT, done);
             request.onsuccess(); // simulate file write success
             
@@ -48,21 +48,21 @@ describe('BookStorageManager()', function () {
             expect(referenceMgrSpy.firstCall.calledWith(
                 BOOK_OBJECT,
                 CHAPTER_OBJECT,
-                'librifox/1234/0.lfa'
+                'librifox/app_dl/1234/0.lfa'
             )).to.be.true;
         });
     });
     describe('#write()', function () {
         it('should write the specified object to the filesystem', function () {
-            storageMock.expects('addFile').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/1234/01.lfa');
-            bsm.write(WEB_RESP.audio_blob, 'librifox/1234/01.lfa');
+            storageMock.expects('addFile').once().withExactArgs(WEB_RESP.audio_blob, 'librifox/app_dl/1234/01.lfa');
+            bsm.write(WEB_RESP.audio_blob, 'librifox/app_dl/1234/01.lfa');
             storageMock.verify();
         });
     });
 
     describe('#getChapterFilePath()', function () {
         it('should return the filepath of the chapter, based on id', function () {
-            expect(bsm.getChapterFilePath(1234, 2)).to.equal('librifox/1234/2.lfa');
+            expect(bsm.getChapterFilePath(1234, 2)).to.equal('librifox/app_dl/1234/2.lfa');
         });
     })
 });

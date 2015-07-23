@@ -182,19 +182,30 @@ function SearchedBookPageGenerator(args) {
     }
     
     function downloadChapterWithCbk(book, chapter, that) {
-        return bookDownloadManager.downloadChapter(
-            book,
-            chapter,
-            function (event) {
-                if (event.lengthComputable) {
-                    var percentage = (event.loaded / event.total) * 100;
-                    $(that).find('.progressBar').show();
-                    $(that).find('.progressBarSlider').css('width', percentage + '%');
+        var args = {
+            book: book,
+            chapter: chapter,
+            callbacks: {
+                progress: function (event) {
+                    if (event.lengthComputable) {
+                        var percentage = (event.loaded / event.total) * 100;
+                        $(that).find('.progressBar').show();
+                        $(that).find('.progressBarSlider').css('width', percentage + '%');
+                    }
+                },
+                finished: function (book_ref) {
+                    showFooterAlert({
+                        book_ref: book_ref
+                    });
+                },
+                error: function () {
+                    if (confirm('The file you are trying to download already exists. Delete the old version? ')) {
+                        bookDownloadManager.forceDownloadChapter(args) // meta referencing??
+                    }
                 }
-            },
-            function (book_ref) {
-                showFooterAlert({book_ref: book_ref});
-            });
+            }
+        };
+        return bookDownloadManager.downloadChapter(args);
     }
 
     function getChaptersFromFeed(book_id, callback_func) {
@@ -229,8 +240,30 @@ function BookDownloadManager(args) {
             },
             additional_args);
     }
+    
+    this.forceDownloadChapter = function (args) {
+         var book_obj = args.book,
+             chapter_obj = args.chapter,
+             filepath = storageManager.getChapterFilePath(book_obj.id, chapter_obj.index);
+        
+        fileManager.deleteFile(filepath).then(() => {
+            that.downloadChapter(args);
+        }).catch(e => {throw e});
+    }
 
-    this.downloadChapter = function (book_obj, chapter_obj, progress_callback, finished_callback) {
+    this.downloadChapter = function (args) {
+        var book_obj = args.book,
+            chapter_obj = args.chapter,
+            progress_callback,
+            finished_callback,
+            error_callback;
+        
+        if (args.callbacks) {
+            progress_callback = args.callbacks.progress,
+            finished_callback = args.callbacks.finished,
+            error_callback = args.callbacks.error;
+        }
+        
         // assumes that #writeChapter will always write following this pattern, which could cause problems
         var filepath = storageManager.getChapterFilePath(book_obj.id, chapter_obj.index);
         fileManager.testForFile(
@@ -247,12 +280,7 @@ function BookDownloadManager(args) {
                     );
                 } else {
                     console.warn('The file at ' + filepath + ' already exists.');
-                    if (confirm('The file you are trying to download already exists. Delete the old version? ') ) {
-                        fileManager.deleteFile(filepath).then(() => {
-                            // make this non-recursive?
-                            that.downloadChapter(book_obj, chapter_obj, progress_callback, finished_callback);
-                        }).catch(e => {throw e});
-                    }
+                    error_callback && error_callback();
                 }
             }
         );
@@ -468,7 +496,7 @@ function BookReferenceManager(args) {
         };
         book_ref.deleteChapter = function (index, success_fn) {
             var this_book_ref = this;
-            fileManager.deleteFile(this_book_ref[index].path)
+            return fileManager.deleteFile(this_book_ref[index].path)
                 .then(function () {
                     delete this_book_ref[index];
                     var key = JSON_PREFIX + this_book_ref.id;
@@ -480,10 +508,11 @@ function BookReferenceManager(args) {
                         store_item(key, this_book_ref);
                     }
                     success_fn && success_fn();
-
                 })
                 .catch(function (err) {
-                    alert('Error deleting chapter with index ' + index + '. ' + err.name)
+                    console.warn('Error deleting chapter with index ' + index + '. ', err.name, err.stack);
+                    alert('Error deleting chapter with index ' + index + '. ' + err.name);
+                    throw err;
                 });
         };
 
@@ -651,15 +680,6 @@ ID3Parser = (function () {
         });
     }
     
-    function getMediaDBMetadataParser() {
-        return function (blob, success, fail) {
-            parse(blob).then((metadata) => {
-                console.log(metadata);
-                success(metadata)
-            }).catch((metadata) => {fail(metadata)});
-        }
-    }
-    
     /**
      * Fill in any default metadata fields, such as a fallback for the title, and
      * the rating/playcount.
@@ -695,10 +715,45 @@ ID3Parser = (function () {
     }
     
     return {
-        parse: parse,
-        getMediaDBMetadataParser: getMediaDBMetadataParser
+        parse: parse
     };
 })();
+
+var MediaDBMetadataParser = (function () {
+    'use strict';
+    
+    // selects paths that match any of the following:
+    // (assuming APP_DOWNLOADS_DIR = librifox/app_dl)
+    //
+    // librifox/app_dl/01/01.lfa
+    // sdcard/librifox/app_dl/01/01.lfa
+    // /sdcard/librifox/app_dl/01/01.lfa
+    // /sdcard1/librifox/app_dl/01/01.lfa
+    // 
+    // BUT does not match
+    // 
+    // /sdcard/other_folder/librifox/app_dl/01/01.lfa
+    var inapp_download_path_matcher = new RegExp("^\/*(?:[^\/]+\/)?" + APP_DOWNLOADS_DIR + "\/(\d+)\/(\d+)\.lfa$")
+    
+    
+    function getParser(id3_parser) {
+        return function (blob, success, fail) {
+            var match = blob.name.match(inapp_download_path_matcher);
+            return id3_parser.parse(blob).catch(e => {
+                console.warn('Encountered error ', e)
+                return {};
+            }).then(metadata => {
+                if (match) {
+                    console.log('detected file was downloaded by app ', match);
+                    metadata.downloaded_in_app = true;
+                }
+                success(metadata)
+            });
+        }
+    }
+    
+    return {getParser: getParser};
+})()
 
 //var db = new MediaDB("sdcard", ID3Parser.getMediaDBMetadataParser(), {includeFilter: /[^\.]+\.lfa$/, version: 1});
 
@@ -924,7 +979,13 @@ function StoredBookPageGenerator(args) {
                 $('.continue-playback')
                     .show()
                     .click(function () {
-                        player_data_handle(ui_state.book, user_progress.current_chapter_index, user_progress.position)
+                        player_data_handle(
+                            ui_state.book,
+                            user_progress.current_chapter_index,
+                            {
+                                position: user_progress.position,
+                                resume_playback: true
+                            })
                     });
             }
             
@@ -961,7 +1022,7 @@ function StoredBookPageGenerator(args) {
             href: 'player.html',
             text: chapter_ref.name,
             click: function () {
-                player_data_handle(ui_state.book, chapter_index);
+                player_data_handle(ui_state.book, chapter_index, {resume_playback: false});
             }
         });
         return $('<li/>', {
@@ -1149,12 +1210,18 @@ function Player(args) {
         event_manager.trigger('timeupdate');
         player_options.timeupdate && player_options.timeupdate.apply(this, arguments);
     }
-    function onError (e) {
-        var error_str =
-            'Error loading chapter "' +
-            that.getCurrentInfo().chapter.name +
-            '" with path ' + that.getCurrentInfo().chapter.path +
-            '. Is the file corrupted?'
+    function onError (path) {
+        var error_str;
+        if (that.getCurrentInfo()) {
+            error_str = 'Error loading chapter "' +
+                        that.getCurrentInfo().chapter.name +
+                        '" with path ' + that.getCurrentInfo().chapter.path +
+                        '. Is the file corrupted?'
+        } else if (path) {
+            error_str = 'Error loading file from path ' + path
+        } else {
+            error_str = 'Something went wrong while loading audio into the player.'
+        }
         console.error(error_str);
         alert(error_str);
     }
@@ -1185,8 +1252,11 @@ function Player(args) {
         };
         
         audio_element = getAudioElement();
-        
-        that.playFromPath(obj[index].path, options);
+        if (obj[index]) {
+            that.playFromPath(obj[index].path, options);
+        } else {
+            console.warn('Could not find the requested chapter.');
+        }
     }
     
     this.next = function () {
@@ -1216,8 +1286,9 @@ function Player(args) {
             function (file) {
                 console.log(file.type, file);
                 getAudioElement().src = create_object_url_fn(file);
-            }, 
-            onError
+            }, () => {
+                onError(path);
+            }
         );
     }
     
@@ -1325,11 +1396,18 @@ function BookPlayerPageGenerator(args) {
         that = this;
     
     this.getDataHandle = function () {
-        return function (curr_book, chapter_index, position) {
+        return function (curr_book, chapter_index, options) {
             player_context = {};
             player_context.book = curr_book;
             player_context.chapter_index = chapter_index;
-            player_context.position = position;
+            if (options) {
+                player_context.position = options.position;
+                player_context.resume_playback = options.resume_playback;
+            }
+            
+            if (!player_context.hasOwnProperty('resume_playback')) {
+                player_context.resume_playback = true;
+            }
         }
     }
 
@@ -1357,6 +1435,8 @@ function BookPlayerPageGenerator(args) {
                 player.queueBook(player_context.book, player_context.chapter_index, options);
                 player_context = undefined; // delete player context and use
                                             // player.getCurrentInfo()
+            } else if (player_context.resume_playback) {
+                player.play();
             }
 
             updateUIandContext(selectors, controls);

@@ -2,8 +2,8 @@ describe('BookReferenceManager()', function () {
     "use strict";
     var async_storage,
         ls_proto,
-        brm,
-        storageMgr_delete_spy;
+        spy_deleteFile,
+        brm;
     
     before(function () {
         async_storage = createFakeAsyncStorage();
@@ -11,12 +11,6 @@ describe('BookReferenceManager()', function () {
     
     beforeEach(function () {
         async_storage._reset_store();
-        var mockStorageManager = {
-            delete: function (path, success, fail) {
-                success();
-            }
-        }
-        storageMgr_delete_spy = sinon.spy(mockStorageManager, 'delete');
         async_storage.setItem('bookid_9999', {
             0: {
                 path: 'path1/to',
@@ -26,10 +20,17 @@ describe('BookReferenceManager()', function () {
             id: 9999
         });
         
+        var fileManager = {
+            deleteFile: function () {
+                return Promise.resolve();
+            }
+        }
+        spy_deleteFile = sinon.spy(fileManager, 'deleteFile');
+        
         brm = new BookReferenceManager({
             asyncStorage: async_storage,
+            fileManager: fileManager
         });
-        brm.registerStorageManager(mockStorageManager);
     });
 
     describe('#loadBookReference()', function () {
@@ -217,7 +218,8 @@ describe('BookReferenceManager()', function () {
     });
     describe('functions of returned book reference', function () {
         describe('#deleteChapter()', function () {
-            it('deletes the chapter with the given index and writes to local_storage', function (done) {
+            it('deletes the chapter with the given index and writes to storage', function (done) {
+                
                 async_storage._set_instant();
                 
                 var mock_book = {
@@ -227,31 +229,32 @@ describe('BookReferenceManager()', function () {
                     index: 1,
                     name: 'Chapter 1'
                 }
-                var success_spy = sinon.spy();
                 brm.storeChapterReference(mock_book, mock_chapter, 'path2/to');
                 brm.loadBookReference(9999, function (book_ref) {
-                    book_ref.deleteChapter(0, success_spy);
+                    book_ref.deleteChapter(0).then(() => {
+                        console.log('executing');
+                        expect(book_ref).not.to.have.property(0);
+                        expect(book_ref).property('1').to.be.an('object');
 
-                    expect(book_ref).not.to.have.property(0);
-                    expect(book_ref).property('1').to.be.an('object');
-
-                    expect(success_spy).to.have.been.calledOnce;
-                    expect(storageMgr_delete_spy).to.have.been.calledOnce;
-                    brm.loadBookReference(9999, function (book_ref_copy) {
-                        expect(book_ref_copy).not.to.have.property(0);
-                        expect(book_ref_copy).property('1').to.be.an('object');
-                        done();
-                    });
+                        expect(spy_deleteFile).to.have.been.calledOnce;
+                        async_storage.getItem('bookid_' + 9999, function (book_ref_copy) {
+                            console.log(book_ref_copy);
+                            expect(book_ref_copy).not.to.have.property(0);
+                            expect(book_ref_copy).property('1').to.be.an('object');
+                            done();
+                        });
+                    }).catch(PROMISE_CATCH);
                 });
             });
             it('also deletes the book if it is the only chapter', function (done) {
                 async_storage._set_instant();
                 brm.loadBookReference(9999, function (book_ref) {
-                    book_ref.deleteChapter(0);
-                    brm.loadBookReference(9999, function (book_ref_copy) {
-                        expect(book_ref_copy).to.be.a('null');
-                        done();
-                    });
+                    book_ref.deleteChapter(0).then(() => {
+                        brm.loadBookReference(9999, function (book_ref_copy) {
+                            expect(book_ref_copy).to.be.a('null');
+                            done();
+                        });
+                    }).catch(PROMISE_CATCH);
                 });
             });
         });
