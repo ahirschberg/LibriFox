@@ -246,7 +246,7 @@ function BookDownloadManager(args) {
              chapter_obj = args.chapter,
              filepath = storageManager.getChapterFilePath(book_obj.id, chapter_obj.index);
         
-        fileManager.deleteFile(filepath).then(() => {
+        return fileManager.deleteFile(filepath).then(() => {
             that.downloadChapter(args);
         }).catch(e => {throw e});
     }
@@ -292,6 +292,7 @@ var lf_getDeviceStorage = function (storage_str) {
 }
 
 function BookStorageManager(args) {
+    'use strict';
     var that = this,
         deviceStoragesManager = args.deviceStoragesManager,
         referenceManager = args.referenceManager;
@@ -307,7 +308,7 @@ function BookStorageManager(args) {
 
     this.write = function (blob, path, success_fn) {
         console.log('writing:', blob, path);
-        var request = deviceStoragesManager.getDownloadsDevice().addFile(blob, path);
+        var request = deviceStoragesManager.getStorage().addFile(blob, path);
         if (request) {
             request.onsuccess = function () {
                 console.log('wrote: ' + this.result);
@@ -321,7 +322,7 @@ function BookStorageManager(args) {
     };
     
     this.getChapterFilePath = function (book_id, chapter_index) {
-        return APP_DOWNLOADS_DIR + '/' + book_id + '/' + chapter_index + '.lfa';
+        return deviceStoragesManager.downloadsStorageName + APP_DOWNLOADS_DIR + '/' + book_id + '/' + chapter_index + '.lfa';
     };
 }
 
@@ -733,21 +734,25 @@ var MediaDBMetadataParser = (function () {
     // BUT does not match
     // 
     // /sdcard/other_folder/librifox/app_dl/01/01.lfa
-    var inapp_download_path_matcher = new RegExp("^\/*(?:[^\/]+\/)?" + APP_DOWNLOADS_DIR + "\/(\d+)\/(\d+)\.lfa$")
-    
+    var inapp_download_path_matcher = new RegExp("^\/*(?:[^\/]+\/)?" + APP_DOWNLOADS_DIR + "\/(\\d+)\/(\\d+)\.lfa$")
     
     function getParser(id3_parser) {
         return function (blob, success, fail) {
             var match = blob.name.match(inapp_download_path_matcher);
             return id3_parser.parse(blob).catch(e => {
                 console.warn('Encountered error ', e)
-                return {};
+                return undefined;
             }).then(metadata => {
                 if (match) {
                     console.log('detected file was downloaded by app ', match);
-                    metadata.downloaded_in_app = true;
+                    var _metadata = metadata || {}
+                    _metadata.downloaded_in_app = true;
+                    success(_metadata);
+                } else if (metadata) {
+                    success(metadata);
+                } else {
+                    fail();
                 }
-                success(metadata)
             });
         }
     }
@@ -1610,34 +1615,49 @@ function SettingsPageGenerator(args) {
     };
 }
 
-function DeviceStoragesManager(args) {
+function DeviceStoragesManager(args) { // untested
+    'use strict'
     var settings = args.settings,
-        downloads_storage_index = 0,
+        downloads_storage_index,
+        downloads_storage_name,
+        filemanager_wrapped_storage,
         nav = args.navigator || navigator;
     
-    settings.getAsync('downloads_storage_device_index', function (value) {
-        downloads_storage_index = value || 0;
+    settings.getAsync('downloads_storage_device_index', value => {
+        this.setDownloadsDeviceByIndex(value || 0);
     });
     
     this.setDownloadsDeviceByIndex = function (index) {
         if (isFinite(index) && Math.floor(index) == index) {
             settings.set('downloads_storage_device_index', index);
             downloads_storage_index = index;
+            
+            downloads_storage_name = nav.getDeviceStorages('sdcard')[index].storageName;            
         } else {
             console.error('The index ' + index + ' was not valid');
         }
     };
     
-    this.getDownloadsDevice = function () { // TODO check performance implications of this / refactor
-        return new FileManager(nav.getDeviceStorages('sdcard')[downloads_storage_index]);
-    };
+    Object.defineProperty(this, 'downloadsStorageName', {
+        get: () => {
+            if (!downloads_storage_name) {
+                console.error('No name for current storage device!');
+                return '';
+            } else {
+                return '/' + downloads_storage_name + '/'
+            }
+        }
+    });
     
     this.getDownloadsDeviceIndex = function () {
         return downloads_storage_index;
     };
     
-    this.getSDCard = function () {
-        return navigator.getDeviceStorage('sdcard');
+    this.getStorage = function () {
+        if (!filemanager_wrapped_storage) {
+            filemanager_wrapped_storage = new FileManager(nav.getDeviceStorage('sdcard'));
+        }
+        return filemanager_wrapped_storage;
     }
     
     this.eachDevice = function (func_each) {
@@ -1759,6 +1779,8 @@ function FileManager(storage_device) {
             error && error(this);
         };
     }
+    
+    this.mozStorageDevice = storage_device;
 }
 
 function SearchResultsPageGenerator(args) {

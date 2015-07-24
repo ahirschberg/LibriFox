@@ -5,7 +5,7 @@ describe('BookDownloadManager()', function () {
         storageManager,
         testBlob,
         file_exists_bool,
-        spy_httpreq_getBlob;
+        spies = {};
 
     before(function () {
         testBlob = WEB_RESP.audio_blob;
@@ -15,7 +15,7 @@ describe('BookDownloadManager()', function () {
             } // simulate LibriVox JSON title search response
         }
         var httpRequestHandler = new StubHttpRequestHandler();
-        spy_httpreq_getBlob = sinon.spy(httpRequestHandler, 'getBlob');
+        spies.hr_getBlob = sinon.spy(httpRequestHandler, 'getBlob');
 
         storageManager = {
             writeChapter: function (blob, book_obj, chapter_obj) {},
@@ -23,22 +23,29 @@ describe('BookDownloadManager()', function () {
                 return 'foo/' + id + '/' + index + '.lfa'; 
             }
         };
-        writeChapterSpy = sinon.spy(storageManager, 'writeChapter');
+        spies.sm_writeChapter = sinon.spy(storageManager, 'writeChapter');
+        
+        var fileManager = {
+            testForFile: function (path, callback) {
+                callback(file_exists_bool); // file does not exist
+            },
+            deleteFile: () => Promise.resolve()
+        };
+        spies.fm_deleteFile = sinon.spy(fileManager, 'deleteFile');
         
         bdm = new BookDownloadManager({
             httpRequestHandler: httpRequestHandler,
             storageManager: storageManager,
-            fileManager: {
-                testForFile: function (path, callback) {
-                    callback(file_exists_bool); // file does not exist
-                }
-            }
+            fileManager: fileManager
         });
+        spies.bdm_downloadChapter = sinon.spy(bdm, 'downloadChapter');
     });
     
     beforeEach(function () {
         file_exists_bool = false;
-        spy_httpreq_getBlob.reset();
+        Object.keys(spies).forEach(key => {
+            spies[key].reset();
+        })
     });
 
     describe('#downloadChapter()', function () {
@@ -47,8 +54,8 @@ describe('BookDownloadManager()', function () {
                 book: BOOK_OBJECT,
                 chapter: CHAPTER_OBJECT
             });
-            expect(writeChapterSpy.calledOnce).to.be.true;
-            expect(writeChapterSpy.firstCall.calledWith(
+            expect(spies.sm_writeChapter.calledOnce).to.be.true;
+            expect(spies.sm_writeChapter.firstCall.calledWith(
                     testBlob,
                     BOOK_OBJECT,
                     CHAPTER_OBJECT
@@ -82,7 +89,7 @@ describe('BookDownloadManager()', function () {
                     // ugly way to get progress_callback
                     // forces our test to know getBlob interface :(
                     expect(
-                        spy_httpreq_getBlob.getCall(0).args[2].progress_callback
+                        spies.hr_getBlob.getCall(0).args[2].progress_callback
                     ).to.be.a('function');
                 });
             });
@@ -93,10 +100,24 @@ describe('BookDownloadManager()', function () {
                         chapter: CHAPTER_OBJECT
                     });
                     expect(
-                        spy_httpreq_getBlob.getCall(0).args[2].progress_callback
+                        spies.hr_getBlob.getCall(0).args[2].progress_callback
                     ).to.be.an('undefined');
                 });
             });
         });
     });
+    describe('#forceDownloadChapter()', function () {
+        it('deletes file at path, calls #downloadChapter() with arguments', function () {
+            var args = {
+                book: {id: 1337},
+                chapter: {index: 0}
+            };
+            bdm.forceDownloadChapter(args).then(() => {
+                expect(spies.fm_deleteFile).to.have.been.calledOnce;
+                expect(spies.fm_deleteFile).to.have.been.calledWithExactly('foo/1337/0.lfa');
+                
+                expect(spies.bdm_downloadChapter).to.have.been.calledWithExactly(args);
+            });
+        })
+    })
 });

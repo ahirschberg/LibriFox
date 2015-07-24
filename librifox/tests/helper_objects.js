@@ -93,4 +93,5 @@ var createFakeAsyncStorage = function () {
     };
 };
 
-PROMISE_CATCH = (e => console.error(e.message + '\n\n', e.stack));
+var PROMISE_CATCH = (e => console.error(e.message + '\n\n', e.stack));
+var PROMISE_CATCH_THROW = (e => setTimeout(() => {throw e}));
