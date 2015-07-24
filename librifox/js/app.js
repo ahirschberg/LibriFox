@@ -269,7 +269,6 @@ function BookDownloadManager(args) {
         fileManager.testForFile(
             filepath,
             function (exists) {
-                console.log(filepath, exists);
                 if (!exists) {
                     downloadFile(
                         chapter_obj.url,
@@ -568,50 +567,6 @@ function BookReferenceManager(args) {
     }
 }
 
-function BookReferenceValidator(args) {
-    'use strict';
-    
-    var fileManager = args.fileManager,
-        referenceManager = args.referenceManager;
-    
-    this.registerEvents = function (storage_device) {
-        storage_device.addEventListener("change", function (event) {
-            console.log('The file "' + event.path + '" has been ' + event.reason);
-        });
-    };
-    
-    this.validateMetadata = function (done_func) {
-        var num_chapters = 0,
-            num_chapters_checked = 0,
-            invalid_paths = [];
-        if (done_func) { // don't bother checking length if it won't matter
-            referenceManager.everyChapter(function () {
-                num_chapters += 1
-            });
-        }
-        referenceManager.everyChapter(function (chapter, ch_book_ref, index) {
-            fileManager.testForFile(chapter.path, function (exist) {
-                num_chapters_checked += 1;
-                var deleteChapter_done_func = undefined;
-                if (done_func && num_chapters_checked === num_chapters) {
-                    deleteChapter_done_func = function () {
-                        done_func(invalid_paths);
-                    }
-                }
-
-                if (!exist) {
-                    invalid_paths.push(chapter.path);
-                    console.log('Could not find file at ' + chapter.path + ' removing reference in JSON');
-                    ch_book_ref.deleteChapter(index, deleteChapter_done_func);
-                } else if (deleteChapter_done_func && invalid_paths.length > 0) {
-                    deleteChapter_done_func();
-                }
-            });
-        });
-    };
-}
-
-
 ID3Parser = (function () {
     // Hey, when I wrote this I was learning promises for the first time!
     // I read the A+ specification, and it seems like promises that don't chain
@@ -738,7 +693,7 @@ var MediaDBMetadataParser = (function () {
     
     function getParser(id3_parser) {
         return function (blob, success, fail) {
-            var match = blob.name.match(inapp_download_path_matcher);
+            var match = isAppDownload(blob);
             return id3_parser.parse(blob).catch(e => {
                 console.warn('Encountered error ', e)
                 return undefined;
@@ -757,24 +712,52 @@ var MediaDBMetadataParser = (function () {
         }
     }
     
-    return {getParser: getParser};
+    function isAppDownload(obj) {
+        var path;
+        if (typeof obj === 'string') {
+            path = obj;
+        } else {
+            path = obj.name;
+        }
+        return path.match(inapp_download_path_matcher);
+    }
+    
+    return {
+        getParser: getParser,
+        isAppDownload: isAppDownload
+    };
 })()
 
-//var db = new MediaDB("sdcard", ID3Parser.getMediaDBMetadataParser(), {includeFilter: /[^\.]+\.lfa$/, version: 1});
-
 var MediaManager = (function () {
-    var db;
-    function MediaManager(mediadb) {
-        db = mediadb;
+    var db,
+        referenceManager;
+    function MediaManager(_referenceManager) {
+        referenceManager = _referenceManager;
+        db = new MediaDB("sdcard", MediaDBMetadataParser.getParser(ID3Parser), {includeFilter: /[^\.]+\.lfa$/, version: 1.1});
+        db.addEventListener('created', createdEvent);
+        db.addEventListener('deleted', deletedEvent);
+        db.addEventListener('modified', debug_print_cbk);
+    }
+    
+    function createdEvent(event) {
+        console.log('created', event);
+    }
+    
+    function deletedEvent(event) {
+        console.log('deleted', event)
+    }
+    
+    function foxify(mediadb_item) {
+        referenceManager
     }
     
     MediaManager.prototype.enumerate = function (callback) {
         db.enumerate((item) => {
-            console.log(item);
+            callback(item);
         });
     }
     
-    MediaManager.prototype.deleteDatabase = function () {
+    MediaManager.prototype.__debug__deleteDatabase = function () {
         var name = db.dbname;
         db.close();
         
@@ -834,29 +817,6 @@ function FilesystemBookReferenceManager(args) {
     this.eachReference = function (func_each) {
         books.eachReference(func_each);
     };
-    
-    this.updateReferences = function () {
-        books.clear();
-        mediaDB.enumerate((listing) => {
-            var metadata = listing.metadata,
-                album = metadata.album,
-                artist = metadata.artist;
-            if (album) {
-                var book_ref = books.getBook(metadata.album);
-                if (!book_ref) {
-                    book_ref = {
-                        title: album,
-                        author: artist
-                    };
-                }
-                //book_ref[]
-            }
-        })
-    }
-    
-    function createBookRefFromMediaListing(media_listing) {
-        
-    }
     
     function applyHelperFunctions (book_ref) {
         book_ref.eachChapter = function (each_fn) { // function duplicated from BookReferenceManager! needs fix!
@@ -1849,14 +1809,16 @@ function SearchResultsPageGenerator(args) {
     }
 
     function getSearchJSON(search_string, callback_func) {
+        var lv_url = generateBookUrl(search_string, field);
         httpRequestHandler.getJSON(
-            generateBookUrl(search_string, field),
+            lv_url,
             function (xhr) {
                 callback_func(xhr.response.books);
             },
             {
                 error_callback: function () {
                     alert('Error loading search results.');
+                    console.warn('Could not load search results from ' + lv_url);
                 }
             });
     }
@@ -1929,14 +1891,19 @@ function HttpRequestHandler() {
 
 // Instantiate app if not running in test environment
 if (lf_getDeviceStorage()) {
-    createApp();
+    LazyLoader.load(['js/lib/async_storage.js', 'js/lib/mediadb.js'], 
+                    () => createApp());
 }
-var _player;
+
+var _mm;
+
 function createApp () {
+    'use strict';
     var settings = new SettingsManager({
             asyncStorage: asyncStorage
         }),
         fileManager = new FileManager(lf_getDeviceStorage()),
+        mediaManager = new MediaManager(),
         httpRequestHandler = new HttpRequestHandler(),
         player = new Player({
             fileManager: fileManager
@@ -1986,14 +1953,6 @@ function createApp () {
             results_selector: '#results-listing',
             sr_chapters_data_handle: searchedBookPageGenerator.getDataHandle()
         }),
-        bookReferenceValidator = new BookReferenceValidator({
-            referenceManager: bookReferenceManager,
-            fileManager: fileManager
-        }),
-        fsBookReferenceManager = new FilesystemBookReferenceManager({
-            fileManager: fileManager,
-            settings: settings
-        }),
         storedBooksListPageGenerator = new StoredBooksListPageGenerator({
             bookReferenceManager: bookReferenceManager,
             fsBookReferenceManager: fsBookReferenceManager,
@@ -2005,13 +1964,6 @@ function createApp () {
             deviceStoragesManager: deviceStoragesManager
         });
 
-    bookReferenceValidator.registerEvents(lf_getDeviceStorage());
-    bookReferenceValidator.validateMetadata(function (invalid_paths) {
-        console.log(invalid_paths);
-        alert('Warning: the following files were not retrieved ' + invalid_paths.join(', '));
-        storedBooksListPageGenerator.refreshList();
-    });
-    //fsBookReferenceManager.findAllChapters();
     storedBooksListPageGenerator.registerEvents({
         list: '#stored-books-list',
         page: '#storedBooksList',
@@ -2056,5 +2008,5 @@ function createApp () {
         fileManager.displayAppFiles();
     });
     
-    _player = player;
+    _mm = mediaManager;
 }
