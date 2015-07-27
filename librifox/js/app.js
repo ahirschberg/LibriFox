@@ -31,6 +31,9 @@ function Book(args) {
     this.title = stripHTMLTags(json.title);
     this.id = parseInt(json.id);
 }
+Book.isValidIndex = function (index) {
+    return /^\d+$/.test(index)
+}
 
 function Chapter(args) {
     var name_regex = /^<!\[CDATA\[(.*)\]\]>$/;
@@ -326,6 +329,7 @@ function BookStorageManager(args) {
 }
 
 function BookReferenceManager(args) {
+    'use strict';
     var args = args || {},
         async_storage = args.asyncStorage,
         fileManager = args.fileManager,
@@ -346,28 +350,33 @@ function BookReferenceManager(args) {
         return cloned_obj;
     }
     
-    this.updateUserData = function (book_id, current_chapter_index, position) {
+    this.updateUserData = function (book_id, data_obj) {
         that.loadBookReference(book_id, function (book_ref) {
-            book_ref[PlayerProgressManager.USER_PROGRESS_KEY] = {
-                current_chapter_index: current_chapter_index,
-                position: position
+            if (!book_ref) {
+                book_ref = {};
             }
+            if (!data_obj) {
+                delete book_ref[PlayerProgressManager.USER_PROGRESS_KEY];
+            } else {
+                book_ref[PlayerProgressManager.USER_PROGRESS_KEY] = data_obj;
+            }
+            
             store_item(JSON_PREFIX + book_id, book_ref);
         });
     }
     
     this.storeChapterReference = function (book_obj, chapter_obj, path, options) {
         options = options || {}
-        if (!isValidIndex(book_obj.id)) {
+        if (!Book.isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
-        that.loadBookReference(book_obj.id, function (obj) {
+        return that.loadBookReference(book_obj.id).then(function (obj) {
             console.log('loadBookReference callback evaluated');
             var obj = obj || {};
             obj.title = obj.title || book_obj.title;
             obj.id = obj.id || book_obj.id;
 
-            if (!isValidIndex(chapter_obj.index)) {
+            if (!Book.isValidIndex(chapter_obj.index)) {
                 throw new Error('chapter_obj.index is not a valid index: ' + chapter_obj.index);
             }
             obj[chapter_obj.index] = {
@@ -388,7 +397,7 @@ function BookReferenceManager(args) {
             console.log('store_in_async called.')
             var obj_to_store = strip_functions(item);
             console.log('storing ', obj_to_store);
-            async_storage.setItem(key, obj_to_store, function (transaction) {
+            async_storage.setItem(key, obj_to_store, function () {
                 console.log('wrote to asyncStorage:', obj_to_store);
                 var job = current_jobs[key];
                 console.log('job.when_done is', job.when_done)
@@ -422,148 +431,75 @@ function BookReferenceManager(args) {
             prefix = JSON_PREFIX;
         }
         var os_book_ref = obj_storage[prefix + book_id];
-        if (os_book_ref) {
-            load_callback(os_book_ref);
-        } else {
-            async_storage.getItem( (prefix + book_id), function (obj) {
-                if (obj_storage[prefix + book_id]) { // if the object has loaded since the async was called
-                    load_callback(obj_storage[prefix + book_id]);
-                } else {
-                    applyHelperFunctions(obj);
-                    obj_storage[prefix + book_id] = obj;
-                    load_callback(obj);
-                }
-            });
-        }
+        return new Promise(resolve => {
+            if (os_book_ref) {
+                resolve(os_book_ref);
+            } else {
+                async_storage.getItem( (prefix + book_id), function (obj) {
+                    console.log('got obj from async storage', obj)
+                    if (obj_storage[prefix + book_id]) { // if the object has loaded since the async was called
+                        resolve(obj_storage[prefix + book_id]);
+                    } else {
+                        obj_storage[prefix + book_id] = obj;
+                        resolve(obj);
+                    }
+                });
+            }
+        }).then(book_ref => {
+            if (load_callback) {
+                load_callback(book_ref);
+            }
+            return book_ref;
+        }).catch(e => {
+            if (load_callback) {
+                console.error(e);
+            }
+            throw e;
+        });
     };
 
-    this.eachReference = function (each_fn) {
-        async_storage.length(function(length) {
-            var i;
+    this.eachReference = function (each_fn, done_fn) {
+        async_storage.length(length => {
+            if (length === 0) {
+                done_fn && done_fn();
+            }
+            var i, 
+                count = 0,
+                num_books = length;
             for (i = 0; i < length; i++) {
                 async_storage.key(i, function(key) {
+                    console.warn('>>>>key: ' + key + ' i ' + i + ' count ' + count + ' len ' + length);
+                    async_storage._print_store();
+
                     if (key.startsWith(JSON_PREFIX)) {
+                        console.log('adding key ' + key)
                         that.loadBookReference(key, function (book_ref) {
+                            console.log('Sending to each_fn: ', book_ref);
                             each_fn(book_ref);
+                            console.log('Count is now ' + count + ', will exec @ ' + (length - 1));
+                            if (count >= num_books - 1) {
+                                done_fn && done_fn();
+                            }
+                            
+                            ++count;
                         }, '');
+                    } else {
+                        if (count >= num_books - 1) {
+                                done_fn && done_fn();
+                            }
+                        --num_books;
                     }
                 });
             }
         });
     };
     
-    this.everyChapter = function (each_ch_fn) {
+    this.everyChapter = function (each_ch_fn, done_func) {
         that.eachReference(function (book_ref) {
             book_ref.eachChapter(function (chapter, index) {
                 each_ch_fn(chapter, book_ref, index);
             });
-        });
-    }
-
-    function applyHelperFunctions(book_ref) {
-        if (!book_ref) {
-            return undefined;
-        }
-        
-        console.log('trying to apply helper functions to ', JSON.parse(JSON.stringify(book_ref)));
-        if (typeof book_ref.hasHelperFunctions === 'function') {
-            console.log('book_ref already had helper functions, not reapplying.');
-            return book_ref;
-        }
-        
-        book_ref.hasHelperFunctions = function () {};
-        
-        book_ref.eachChapter = function (each_fn) {
-            Object.keys(book_ref).forEach(function (key) {
-                if (isValidIndex(key) && book_ref.hasOwnProperty(key)) {
-                    each_fn(book_ref[key], parseInt(key, 10));
-                }
-            });
-        };
-        book_ref.numChapters = function () {
-            var length = 0;
-            this.eachChapter(function () {
-                length += 1;
-            });
-            return length;
-        }
-
-        var remove_book_from_references = function (id) {
-            console.log('Completely removing book with id ' + id);
-            delete obj_storage[JSON_PREFIX + id];
-            async_storage.removeItem(JSON_PREFIX + id);
-
-        };
-        book_ref.deleteChapter = function (index, success_fn) {
-            var this_book_ref = this;
-            return fileManager.deleteFile(this_book_ref[index].path)
-                .then(function () {
-                    delete this_book_ref[index];
-                    var key = JSON_PREFIX + this_book_ref.id;
-                    if (this_book_ref.numChapters() === 0) {
-                        remove_book_from_references(this_book_ref.id);
-                    } else {
-                        obj_storage[key] = this_book_ref;
-                        
-                        store_item(key, this_book_ref);
-                    }
-                    success_fn && success_fn();
-                })
-                .catch(function (err) {
-                    console.warn('Error deleting chapter with index ' + index + '. ', err.name, err.stack);
-                    alert('Error deleting chapter with index ' + index + '. ' + err.name);
-                    throw err;
-                });
-        };
-
-
-        // TURN BACK, ALL YE WHO ENTER HERE
-        book_ref.deleteBook = function (success_fn, error_fn) {
-            var this_book_ref = this,
-                errors = false,
-                num_chapters = this_book_ref.numChapters();
-
-            // oh my this is horrible, forced to do this because of FXOS filesystem
-            // error possibility on the 2.0 browser (seems fixed on 2.2)
-            var chapters_attempted_removal = 0,
-                finalize_deletions_if_ready = function () {
-                    chapters_attempted_removal += 1;
-                    if (chapters_attempted_removal >= num_chapters) {
-                        if (!errors) {
-                            // only remove JSON once all chapters have been successfully removed
-                            remove_book_from_references(this_book_ref.id);
-                            
-                            success_fn && success_fn();
-                        } else {
-                            console.warn('Unable to fully remove book "' + this_book_ref.title + '". Errors were encountered when attempting to delete files.');
-                            obj_storage[JSON_PREFIX + this_book_ref.id] = undefined;
-                            store_item(JSON_PREFIX + this_book_ref.id, this_book_ref);
-
-                            error_fn && error_fn();
-                        }
-                    }
-                };
-            if (num_chapters > 0) {
-                this_book_ref.eachChapter(function (chapter, index) {
-                    fileManager.deleteFile(chapter.path)
-                        .then(() => {
-                            delete this_book_ref[index];
-                            finalize_deletions_if_ready();
-                        }).catch(err => {
-                            console.error('Error deleting chapter with index ' + index + '. ' + err.name);
-                            errors = true;
-                            finalize_deletions_if_ready();
-                        });
-                });
-            } else {
-                finalize_deletions_if_ready();
-            }
-        };
-        return book_ref;
-    }
-
-    function isValidIndex(index) {
-        return /^\d+$/.test(index)
+        }, done_func);
     }
 }
 
@@ -693,7 +629,7 @@ var MediaDBMetadataParser = (function () {
     
     function getParser(id3_parser) {
         return function (blob, success, fail) {
-            var match = isAppDownload(blob);
+            var match = getLibriVoxInfoFromPath(blob);
             return id3_parser.parse(blob).catch(e => {
                 console.warn('Encountered error ', e)
                 return undefined;
@@ -712,7 +648,7 @@ var MediaDBMetadataParser = (function () {
         }
     }
     
-    function isAppDownload(obj) {
+    function getLibriVoxInfoFromPath(obj) {
         var path;
         if (typeof obj === 'string') {
             path = obj;
@@ -724,19 +660,20 @@ var MediaDBMetadataParser = (function () {
     
     return {
         getParser: getParser,
-        isAppDownload: isAppDownload
+        getLibriVoxInfoFromPath: getLibriVoxInfoFromPath
     };
 })()
 
 var MediaManager = (function () {
-    var db,
-        referenceManager;
-    function MediaManager(_referenceManager) {
-        referenceManager = _referenceManager;
+    var db;
+    
+    function MediaManager() {
         db = new MediaDB("sdcard", MediaDBMetadataParser.getParser(ID3Parser), {includeFilter: /[^\.]+\.lfa$/, version: 1.1});
         db.addEventListener('created', createdEvent);
         db.addEventListener('deleted', deletedEvent);
         db.addEventListener('modified', debug_print_cbk);
+        
+        MediaManager.prototype.db = db;
     }
     
     function createdEvent(event) {
@@ -745,10 +682,6 @@ var MediaManager = (function () {
     
     function deletedEvent(event) {
         console.log('deleted', event)
-    }
-    
-    function foxify(mediadb_item) {
-        referenceManager
     }
     
     MediaManager.prototype.enumerate = function (callback) {
@@ -780,64 +713,158 @@ function FilesystemBookReferenceManager(args) {
     'use strict';
     
     var fileManager = args.fileManager,
-        settings = args.settings,
-        mediaDB = args.mediaDB,
-        each_book_callback,
-        books = this.books = (function () {
-            var books_store = {};
-            return {
-                untitled: [],
-                getBook: function (book_str) {
-                    return books_store[book_str];
+        mediaManager = args.mediaManager,
+        bookReferenceManager = args.bookReferenceManager,
+        books = {
+            store: {},
+            setChapter: function (store_info, chapter_info) {
+                var obj = this.store[store_info.id] || {
+                    title: store_info.book_title,
+                    id: store_info.id,
+                };
+                if (Book.isValidIndex(store_info.index)) {
+                    obj[store_info.index] = chapter_info;
+                } else {
+                    obj.noindex = obj.noindex || [];
+                    obj.noindex.push(chapter_info);
+                }
+                
+                if (store_info.hasOwnProperty('user_progress')) {
+                    obj.user_progress = store_info.user_progress;
+                }
+                
+                if (typeof obj.hasHelperFunctions !== 'function') {
+                    obj = BookFactory.addFunctions(obj);
+                }
+                
+                this.store[store_info.id] = obj;
+            },
+            forEach: function (each_ref) {
+                Object.keys(this.store).forEach((key) => {
+                    each_ref(this.store[key]);
+                })
+            }
+        };
+    
+    function standardizeItem(mediadb_item) {
+        var path_match = MediaDBMetadataParser.getLibriVoxInfoFromPath(mediadb_item.name);
+        if (path_match) {
+            var book_id = parseInt(path_match[1], 10),
+                chapter_index = parseInt(path_match[2], 10);
+            return bookReferenceManager.loadBookReference(book_id).then(book_ref => {
+                var obj = {
+                    store_info: {
+                        id: book_id,
+                        index: chapter_index,
+                        book_title: book_ref.title,
+                        user_progress: book_ref.user_progress
+                    },
+                    chapter_info: {
+                        name: (book_ref[chapter_index] && book_ref[chapter_index].name) || 'Unknown Chapter',
+                        path: mediadb_item.name
+                    }
+                }
+                return obj;
+            });
+        } else {
+            var metadata = mediadb_item.metadata || {};
+            var obj = {
+                store_info: {
+                    book_title: metadata.album || 'Untitled',
+                    id: metadata.album || -1,
+                    index: metadata.tracknum
                 },
-                setBook: function (book_str, obj) {
-                    books_store[book_str] = obj;
-                },
-                eachReference: function(func_each) {
-                    Object.keys(books_store).forEach(function (key) {
-                        func_each(books_store[key], key);
-                    });
-                    this.untitled.forEach(function () {
-                        func_each.apply(this, arguments);
-                    });
-                },
-                clear: function () {books_store = {}; untitled = []},
-                store: books_store // temp
+                chapter_info: {
+                    name: metadata.title || mediadb_item.name,
+                    path: mediadb_item.name
+                }
             };
-        })();
+            return bookReferenceManager.loadBookReference(obj.store_info.id).then(fs_book_ref => {
+                if (fs_book_ref) {
+                    obj.store_info.user_progress = fs_book_ref.user_progress;
+                }
+                console.log('returning obj: ', obj);
+                return obj;
+            });
+        }
+    }
     
-    this.setCallback = function (each_book) {
-        books.eachReference(function (book) { // in case books are parsed before callback is set
-            each_book(book);
-        });
-        
-        each_book_callback = each_book;
-    };
-    
-    this.eachReference = function (func_each) {
-        books.eachReference(func_each);
-    };
-    
-    function applyHelperFunctions (book_ref) {
-        book_ref.eachChapter = function (each_fn) { // function duplicated from BookReferenceManager! needs fix!
-            Object.keys(book_ref.chapters).forEach(function (key) {
-                if (isValidIndex(key) && book_ref.chapters.hasOwnProperty(key)) {
-                    each_fn(book_ref.chapters[key], parseInt(key, 10));
+    this.collapseChapters = function () {
+        books.store = {};
+        var enumerate_and_collapse = function (resolve, reject) {
+            var count = 0,
+                finished_counting = false,
+                count_completed = 0;
+            mediaManager.enumerate(item => {
+                console.log('item: ', item, item === null);
+                if (item === null) {
+                    finished_counting = true;
+                    if (count_completed >= count) {
+                        resolve(books);
+                    }
+                } else {
+                    ++count;
+                    standardizeItem(item).then(std_item => {
+                        ++count_completed;
+                        books.setChapter(std_item.store_info, std_item.chapter_info);
+                        console.log(count, count_completed, finished_counting);
+                        if (finished_counting && count_completed >= count) {
+                            resolve(books);
+                        }
+                    }).catch(e => reject(e));
                 }
             });
-            book_ref.chapters.unindexed.forEach(function(chapter) {
-                each_fn(chapter);
+        }
+        return new Promise((resolve, reject) => {
+            if (mediaManager.db.state !== 'ready') {
+                mediaManager.db.addEventListener('ready', () => {
+                    enumerate_and_collapse(resolve, reject);
+                })
+            } else {
+                enumerate_and_collapse(resolve, reject);
+            }
+        }).catch(e => console.error(e));
+    }
+}
+
+BookFactory = (function() {
+    'use strict';
+    function addFunctions(book_ref) {
+        if (!book_ref) {
+            return undefined;
+        }
+        
+        if (typeof book_ref.hasHelperFunctions === 'function') {
+            console.log('book_ref already had helper functions, not reapplying.');
+            return book_ref;
+        }
+        
+        book_ref.hasHelperFunctions = function () {};
+        
+        book_ref.eachChapter = function (each_fn, done_fn) {
+            var keys = Object.keys(book_ref),
+                length = keys.length,
+                i = 0;
+            var stop = keys.some(function (key) {
+                if (Book.isValidIndex(key) && book_ref.hasOwnProperty(key)) {
+                    return each_fn(book_ref[key], parseInt(key, 10));
+                }
             });
+            if (!stop) {
+                book_ref.noindex && book_ref.noindex.some(each_fn);
+            }
+            done_fn && done_fn();
         };
         
         return book_ref;
     }
-}
+    
+    return {addFunctions: addFunctions};
+})();
 
 function StoredBooksListPageGenerator(args) {
     "use strict";
     var that = this,
-        referenceManager = args.bookReferenceManager,
         fsReferenceManager = args.fsBookReferenceManager,
         selectors,
         stored_chapters_data_handle = args.stored_chapters_data_handle,
@@ -848,8 +875,8 @@ function StoredBooksListPageGenerator(args) {
         if (!selectors.page) {
             console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
         }
-        $(document).on('pagebeforeshow', selectors.page, function () {
-            console.log('pagebeforeshow called for ' + selectors.page);
+        $(document).on('pagecreate', selectors.page, function () {
+            console.log('pagecreate called for ' + selectors.page);
             that.refreshList();
             
             if (player.getCurrentInfo()) { // TODO use events to make this more robust
@@ -872,33 +899,16 @@ function StoredBooksListPageGenerator(args) {
             console.warn('StoredBookPageGenerator: refreshList probably won\'t do anything: selectors is undefined');
         }
         var $list = $(selectors.list);
-        $list.children('li.stored-book').remove();        
-        referenceManager.eachReference(function (obj) {
-            createListItem(obj).bind('taphold', function () {
-                var that = this;
-                $(selectors.book_actions_popup).popup('open', {
-                    transition: 'pop',
-                    positionTo: that // neat, positions over the held element!
-                });
-                $(selectors.book_actions_popup + ' .delete_book').click(function () {
-                    obj.deleteBook(function () {
-                            $(that).remove();
-                            $list.listview('refresh');
-                        },
-                        function () {
-                            alert('Not all the chapters could be deleted, likely a Firefox OS filesystem issue. Retry after restarting your device.');
-                        });
-                    $(selectors.book_actions_popup).popup('close');
-                });
-            }).appendTo($list);        
-            $list.listview('refresh');
-        });
-        fsReferenceManager.setCallback(function (book_ref) {
-            createListItem(book_ref)
-                .addClass('filesystem_book')
-                .appendTo($list);
-            $list.listview('refresh');
-        });
+        $list.children('li.stored-book').remove();
+        fsReferenceManager.collapseChapters().then(function (books) {
+            console.log('books: ', books)
+            books.forEach(function (book) {
+                createListItem(book)
+                    .addClass('filesystem_book')
+                    .appendTo($list);
+                $list.listview('refresh');
+            });
+        }).catch(e => console.error(e));
     };
     
     function createListItem(book_obj) {
@@ -939,14 +949,13 @@ function StoredBookPageGenerator(args) {
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
             
-            var user_progress = ui_state.book[PlayerProgressManager.USER_PROGRESS_KEY];
-            if (user_progress && user_progress.current_chapter_index >= 0) {
+            var user_progress = ui_state.book.user_progress;
+            if (user_progress) {
                 $('.continue-playback')
                     .show()
                     .click(function () {
                         player_data_handle(
-                            ui_state.book,
-                            user_progress.current_chapter_index,
+                            new PlayerInfo(ui_state.book, {path: user_progress.path}),
                             {
                                 position: user_progress.position,
                                 resume_playback: true
@@ -955,6 +964,7 @@ function StoredBookPageGenerator(args) {
             }
             
             ui_state.book.eachChapter(function (chapter_ref, index) {
+                console.log(chapter_ref);
                 createListItem(chapter_ref, index).bind('taphold', function () {
                     var that = this;
                     $(selectors.book_actions_popup).popup('open', {
@@ -981,13 +991,13 @@ function StoredBookPageGenerator(args) {
         });
     };
     
-    function createListItem(chapter_ref, chapter_index) {
+    function createListItem(chapter_ref) {
         var link = $('<a/>', {
             'class': 'showFullText',
             href: 'player.html',
             text: chapter_ref.name,
             click: function () {
-                player_data_handle(ui_state.book, chapter_index, {resume_playback: false});
+                player_data_handle(new PlayerInfo(ui_state.book, chapter_ref), {resume_playback: false});
             }
         });
         return $('<li/>', {
@@ -1121,24 +1131,24 @@ function PlayerProgressManager (args) {
     });
     
     player.on('finishedqueue', function (old_info) {
-        var user_progress = {
-            book: old_info.book,
-            curr_index: -1
-        };
-        write(user_progress);
+        delete_progress(old_info);
     });
     
     var write = function (curr_info) { // curr_info is an optional argument
         var curr_info = curr_info || player.getCurrentInfo();
+        console.log(player.getCurrentInfo());
         lastPosition = player.position() || 0;
         
         if (curr_info) {
             console.log('writing ', curr_info)
-            referenceManager.updateUserData(curr_info.book.id, curr_info.curr_index, lastPosition);
+            referenceManager.updateUserData(curr_info.book.id, {path: curr_info.chapter.path, name: curr_info.chapter.name, position: lastPosition});
         } else {
             console.log('no player info, nothing to write.');
         }
-    }
+    },
+        delete_progress = function (old_info) {
+            referenceManager.updateUserData(old_info.book.id, null);
+        }
 }
 PlayerProgressManager.USER_PROGRESS_KEY = 'user_progress';
 
@@ -1148,7 +1158,7 @@ function Player(args) {
         create_object_url_fn = args.createObjectURL || URL.createObjectURL,
         fileManager = args.fileManager,
         player_options,
-        queue_info,
+        current_info,
         event_manager = new EventManager(),
         that = this;
     
@@ -1175,7 +1185,12 @@ function Player(args) {
         event_manager.trigger('timeupdate');
         player_options.timeupdate && player_options.timeupdate.apply(this, arguments);
     }
-    function onError (path) {
+    function onPlayerError (event) {
+        if (!event.target.src.match(/\/undefined$/)) { // if the src wasn't explicitly set to undefined
+            console.warn('Player error:', event);
+        }
+    }
+    function onFileLoadError (path) {
         var error_str;
         if (that.getCurrentInfo()) {
             error_str = 'Error loading chapter "' +
@@ -1200,11 +1215,8 @@ function Player(args) {
         event_manager.off(eventName);
     }
     
-    this.queueBook = function (obj, index, options) {
-        queue_info = {
-            book: obj,
-            curr_index: index
-        };
+    this.queueBook = function (player_info, options) {
+        current_info = player_info;
         options = options || {};
         if (!options.hasOwnProperty('autoplay')) { // set queueBook to autoplay by default
             options.autoplay = true;
@@ -1217,31 +1229,31 @@ function Player(args) {
         };
         
         audio_element = getAudioElement();
-        if (obj[index]) {
-            that.playFromPath(obj[index].path, options);
+        if (player_info.chapter) {
+            that.playFromPath(player_info.chapter.path, options);
         } else {
-            console.warn('Could not find the requested chapter.');
+            console.warn('player_info.chapter was undefined, could not play.');
         }
     }
     
     this.next = function () {
-        if (queue_info) {
-            var index = queue_info.curr_index;
-            event_manager.trigger('ended');
-            if (queue_info.book.hasOwnProperty(index + 1)) {
-                that.playFromPath(queue_info.book[index + 1].path, player_options);
-                queue_info.curr_index += 1;
+        event_manager.trigger('ended');
+        if (current_info) {
+            var next = current_info.next();
+            if (next) {
+                that.playFromPath(next.path, player_options);
             } else {
-                console.log('Ending playback, no chapter with index ' + (index + 1));
-                that.pause();
-                audio_element = undefined;
-                var old_queue_info = queue_info;
-                queue_info = undefined;
-                event_manager.trigger('finishedqueue', old_queue_info);
+                console.log('Ending playback, no next chapter.');
+                audio_element.src = undefined;
+                audio_element.load();
+                var old_info = current_info;
+                current_info = undefined;
+                event_manager.trigger('finishedqueue', old_info);
             }
         } else {
-            console.warn('Could not go to next track, nothing in queue.');
+            console.warn('Could not go to next track, nothing in queue');
         }
+        
     }
     
     this.playFromPath = function (path, options) {
@@ -1252,7 +1264,7 @@ function Player(args) {
                 console.log(file.type, file);
                 getAudioElement().src = create_object_url_fn(file);
             }, () => {
-                onError(path);
+                onFileLoadError(path);
             }
         );
     }
@@ -1333,7 +1345,7 @@ function Player(args) {
             audio_element.addEventListener('loadeddata', onLoad);
             audio_element.addEventListener('ended', onEnded);
             audio_element.addEventListener('timeupdate', onTimeUpdate);
-            audio_element.addEventListener('error', onError);
+            audio_element.addEventListener('error', onPlayerError);
         }
         
         return audio_element
@@ -1341,16 +1353,44 @@ function Player(args) {
     this.getAudioElement = getAudioElement;
     
     this.getCurrentInfo = function () {
-        if (!queue_info) {
+        if (!current_info) {
             return null;
         } else {
-            return {
-                book: queue_info.book,
-                curr_index: queue_info.curr_index,
-                chapter: queue_info.book[queue_info.curr_index]
-            };
+            return current_info.info_obj;
         }
     }
+}
+
+function PlayerInfo(book, chapter_to_play) {
+    'use strict';
+    this.book = book;
+    this.chapter = chapter_to_play;
+    
+    this.next = function () {
+        var grab_next_chapter = false,
+            grabbed_chapter = null;
+        book.eachChapter(_chapter => {
+            if (grab_next_chapter) {
+                grabbed_chapter = _chapter;
+                this.chapter = _chapter;
+                return true;
+            }
+            grab_next_chapter = (this.chapter.path === _chapter.path);
+        });
+        
+        return grabbed_chapter;
+    }
+    
+    Object.defineProperty(this, 'info_obj', {
+        get: () => ({
+            book: this.book,
+            chapter: this.chapter,
+            equals: function (other_obj) {
+                return this.book.id === other_obj.book.id &&
+                    this.chapter.path === other_obj.chapter.path
+            }
+        })
+    })
 }
 
 function BookPlayerPageGenerator(args) {
@@ -1361,10 +1401,9 @@ function BookPlayerPageGenerator(args) {
         that = this;
     
     this.getDataHandle = function () {
-        return function (curr_book, chapter_index, options) {
+        return function (playerInfo, options) {
             player_context = {};
-            player_context.book = curr_book;
-            player_context.chapter_index = chapter_index;
+            player_context.playerInfo = playerInfo;
             if (options) {
                 player_context.position = options.position;
                 player_context.resume_playback = options.resume_playback;
@@ -1388,16 +1427,16 @@ function BookPlayerPageGenerator(args) {
               ( player.getCurrentInfo() &&  // if thing playing doesn't match thing 
                 player_context &&           //   requested via player_context...
                 (
-                  player.getCurrentInfo().book.id !== player_context.book.id ||
-                  player.getCurrentInfo().curr_index !== player_context.chapter_index
+                  !player.getCurrentInfo().equals(player_context.playerInfo.info_obj)
                 )
               )
             ) {                             // then queue the book
+                console.log('Player info:', player.getCurrentInfo(), ' player_context ', player_context);
                 var options;
                 if (player_context.position) {
                     options = {desired_position: player_context.position};
                 }
-                player.queueBook(player_context.book, player_context.chapter_index, options);
+                player.queueBook(player_context.playerInfo, options);
                 player_context = undefined; // delete player context and use
                                             // player.getCurrentInfo()
             } else if (player_context.resume_playback) {
@@ -1476,57 +1515,32 @@ function SettingsManager (args) {
         st_settings_key = 'lf_settings',
         that = this;
     
-    // man async is really ugly
-    var loadSettings = (function () {
-        var already_loading = false,
-            callbacks = [];
-        return function (load_callback) {
-            if (!settings) { // all callbacks will be executed when settings loads
-                callbacks.push(load_callback);
-            }
-            
-            // if a load is not in progress, start one
-            // if a load is already in progress, do nothing
-            if (!already_loading) { 
-                already_loading = true;
-                async_storage.getItem(st_settings_key, function (obj) {
-                    var obj = obj || generateDefaultSettings();
-                    settings = obj;
-                    callbacks.forEach(function (cbk, index) {
-                        cbk && cbk(obj);
-                    });
-                });
-            } else if (settings) { // if load has completed, execute callback
-                console.log('loadSettings was called, but settings was already loaded');
-                load_callback(settings);
-            }
-        };
-    })();
-    
-    loadSettings();
-    
     function generateDefaultSettings () {
         return {};
     }
     
     this.set = function (key, value) {
-        settings[key] = value;
-        console.log('settings object is now', settings);
+        return new Promise(resolve => {
+            this.get(st_settings_key).then(() => {
+                settings[key] = value;
+                console.log('settings object is now', settings);
 
-        async_storage.setItem(st_settings_key, settings);
+                async_storage.setItem(st_settings_key, settings, () => {
+                    resolve(settings);
+                });
+            })
+        })        
     };
     this.get = function (key) {
-        if (!settings) {
-            throw 'Looks like you tried to load settings before ' +
-                'they were retrieved. Use getAsync instead!';
-        }
-        return settings[key];
-    };
-    
-    this.getAsync = function (key, callback) {
-        loadSettings(function (settings) {
-            console.log('getAsync settings:', settings);
-            callback(settings[key]);
+        return new Promise(resolve => {
+            if (settings) {
+                resolve(settings[key]);
+            } else {
+                async_storage.getItem(st_settings_key, _settings => {
+                    settings = _settings;
+                    resolve(settings[key]);
+                });
+            }
         });
     };
 }
@@ -1583,7 +1597,7 @@ function DeviceStoragesManager(args) { // untested
         filemanager_wrapped_storage,
         nav = args.navigator || navigator;
     
-    settings.getAsync('downloads_storage_device_index', value => {
+    settings.get('downloads_storage_device_index').then(value => {
         this.setDownloadsDeviceByIndex(value || 0);
     });
     
@@ -1915,6 +1929,11 @@ function createApp () {
             asyncStorage: asyncStorage,
             fileManager: fileManager
         }),
+        fsBookReferenceManager = new FilesystemBookReferenceManager({
+            fileManager: fileManager,
+            mediaManager: mediaManager,
+            bookReferenceManager: bookReferenceManager
+        }),
         playerProgressManager = new PlayerProgressManager({
             player: player,
             referenceManager: bookReferenceManager
@@ -1963,7 +1982,7 @@ function createApp () {
             settings: settings,
             deviceStoragesManager: deviceStoragesManager
         });
-
+    
     storedBooksListPageGenerator.registerEvents({
         list: '#stored-books-list',
         page: '#storedBooksList',

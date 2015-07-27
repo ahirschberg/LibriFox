@@ -41,17 +41,6 @@ p {
     white-space: normal !important;
 }
 
-li.filesystem_book {
-    font-style: italic;
-    border-width: 2px 0 0 0;
-    border-color: rgba(237, 135, 95, 0.48);
-    border-style: solid; 
-    border-collapse: collapse;
-}
-li.filesystem_book:last-child {
-    border-width: 2px 0;
-}
-
 .header-text-no-cutoff {
     margin: 0 10% !important
 }
