@@ -383,8 +383,8 @@ function BookReferenceManager(args) {
     
     function store_item (key, item) {
         var write_to_storage = function (key, item) {
+            var obj_to_store = item;
             console.log('store_in_async called.')
-            var obj_to_store = strip_functions(item);
             console.log('storing ', obj_to_store);
             async_storage.setItem(key, obj_to_store, function () {
                 console.log('wrote to asyncStorage:', obj_to_store);
@@ -852,8 +852,8 @@ function FilesystemBookReferenceManager(args) {
             });
         }
         return new Promise((resolve, reject) => {
-            if (mediaManager.db.state !== 'ready') {
-                mediaManager.db.addEventListener('ready', () => {
+            if (mediaManager.db.state !== 'ready' && mediaManager.db.state !== 'enumerable') {
+                mediaManager.db.addEventListener('enumerable', () => {
                     enumerate_and_collapse(resolve, reject);
                 })
             } else {
