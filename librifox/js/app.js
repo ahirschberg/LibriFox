@@ -339,16 +339,6 @@ function BookReferenceManager(args) {
         current_jobs = {};
     
     this.obj_storage = obj_storage; // for testing access
-
-    function strip_functions (obj) { // assumes only top layer has functions
-        var cloned_obj = jQuery.extend({}, obj);
-        Object.keys(cloned_obj).forEach(function (key) {
-            if (typeof cloned_obj[key] === 'function') {
-                delete cloned_obj[key]
-            }
-        });
-        return cloned_obj;
-    }
     
     this.updateUserData = function (book_id, data_obj) {
         that.loadBookReference(book_id, function (book_ref) {
@@ -386,7 +376,6 @@ function BookReferenceManager(args) {
 
             store_item(JSON_PREFIX + book_obj.id, obj);
             
-            applyHelperFunctions(obj);
             obj_storage[JSON_PREFIX + book_obj.id] = obj;
             options.reference_created && options.reference_created(obj);
         });
@@ -634,15 +623,10 @@ var MediaDBMetadataParser = (function () {
                 console.warn('Encountered error ', e)
                 return undefined;
             }).then(metadata => {
-                if (match) {
-                    console.log('detected file was downloaded by app ', match);
-                    var _metadata = metadata || {}
-                    _metadata.downloaded_in_app = true;
-                    success(_metadata);
-                } else if (metadata) {
+                if (metadata) {
                     success(metadata);
                 } else {
-                    fail();
+                    success();
                 }
             });
         }
@@ -665,23 +649,40 @@ var MediaDBMetadataParser = (function () {
 })()
 
 var MediaManager = (function () {
-    var db;
+    'use strict';
+    var db,
+        event_manager;
     
     function MediaManager() {
-        db = new MediaDB("sdcard", MediaDBMetadataParser.getParser(ID3Parser), {includeFilter: /[^\.]+\.lfa$/, version: 1.1});
+        db = new MediaDB("sdcard", MediaDBMetadataParser.getParser(ID3Parser), {includeFilter: /[^\.]+\.lfa$/, version: 2});
         db.addEventListener('created', createdEvent);
         db.addEventListener('deleted', deletedEvent);
-        db.addEventListener('modified', debug_print_cbk);
+        db.addEventListener('opening', debug_print_cbk);
+        db.addEventListener('upgrading', debug_print_cbk);
+        db.addEventListener('enumerable', debug_print_cbk);
+        db.addEventListener('ready', debug_print_cbk);
+        
+        event_manager = new EventManager();
+        event_manager.registerEvents('created', 'deleted');
         
         MediaManager.prototype.db = db;
     }
     
     function createdEvent(event) {
         console.log('created', event);
+        event_manager.trigger('created', event);
     }
     
     function deletedEvent(event) {
-        console.log('deleted', event)
+        console.log('deleted', event);
+        event_manager.trigger('deleted', event);
+    }
+    
+    MediaManager.prototype.on = function (eventName, callback) {
+        event_manager.on(eventName, callback);
+    }
+    MediaManager.prototype.off = function (eventName) {
+        event_manager.off(eventName);
     }
     
     MediaManager.prototype.enumerate = function (callback) {
@@ -715,13 +716,16 @@ function FilesystemBookReferenceManager(args) {
     var fileManager = args.fileManager,
         mediaManager = args.mediaManager,
         bookReferenceManager = args.bookReferenceManager,
+        change_ui_callback,
         books = {
             store: {},
             setChapter: function (store_info, chapter_info) {
-                var obj = this.store[store_info.id] || {
-                    title: store_info.book_title,
-                    id: store_info.id,
-                };
+                var obj = this.store[store_info.id];
+                if (!obj) {
+                    obj = BookFactory.getBlankBook();
+                    obj.title = store_info.book_title
+                    obj.id = store_info.id
+                }
                 if (Book.isValidIndex(store_info.index)) {
                     obj[store_info.index] = chapter_info;
                 } else {
@@ -733,10 +737,6 @@ function FilesystemBookReferenceManager(args) {
                     obj.user_progress = store_info.user_progress;
                 }
                 
-                if (typeof obj.hasHelperFunctions !== 'function') {
-                    obj = BookFactory.addFunctions(obj);
-                }
-                
                 this.store[store_info.id] = obj;
             },
             forEach: function (each_ref) {
@@ -746,7 +746,33 @@ function FilesystemBookReferenceManager(args) {
             }
         };
     
+    mediaManager.on('created', event => {
+        this.addChapters(event.detail).then(() => {
+            change_ui_callback && change_ui_callback(books);
+        });
+    });
+    
+    mediaManager.on('deleted', event => {
+        var paths = event.detail;
+        paths.forEach(path => {
+            books.forEach(ref => {
+                ref.eachChapter(chapter => {
+                    if (chapter.path === path) {
+                        console.log('deleting chapter with path: ' + chapter.path);
+                        ref.deleteChapter(chapter);
+                    }
+                });
+            });    
+        });
+        change_ui_callback && change_ui_callback(books);
+    });
+    
+    this.registerChangeCallback = function (change_fn) {
+        change_ui_callback = change_fn;
+    }
+    
     function standardizeItem(mediadb_item) {
+        console.log('mediadb_item: ', mediadb_item, 'name:', mediadb_item.name);
         var path_match = MediaDBMetadataParser.getLibriVoxInfoFromPath(mediadb_item.name);
         if (path_match) {
             var book_id = parseInt(path_match[1], 10),
@@ -756,11 +782,11 @@ function FilesystemBookReferenceManager(args) {
                     store_info: {
                         id: book_id,
                         index: chapter_index,
-                        book_title: book_ref.title,
-                        user_progress: book_ref.user_progress
+                        book_title: book_ref && book_ref.title || book_id,
+                        user_progress: book_ref && book_ref.user_progress
                     },
                     chapter_info: {
-                        name: (book_ref[chapter_index] && book_ref[chapter_index].name) || 'Unknown Chapter',
+                        name: (book_ref && book_ref[chapter_index] && book_ref[chapter_index].name) || (chapter_index + ' - Unknown Chapter'),
                         path: mediadb_item.name
                     }
                 }
@@ -789,6 +815,18 @@ function FilesystemBookReferenceManager(args) {
         }
     }
     
+    this.addChapters = function (collection) {
+        var promise = Promise.resolve();
+        collection.forEach(each_ref => {
+            promise = promise.then(() => {
+                return standardizeItem(each_ref)
+            }).then(to_store => {
+                books.setChapter(to_store.store_info, to_store.chapter_info);
+            });
+        });
+        return promise;
+    }
+    
     this.collapseChapters = function () {
         books.store = {};
         var enumerate_and_collapse = function (resolve, reject) {
@@ -796,7 +834,6 @@ function FilesystemBookReferenceManager(args) {
                 finished_counting = false,
                 count_completed = 0;
             mediaManager.enumerate(item => {
-                console.log('item: ', item, item === null);
                 if (item === null) {
                     finished_counting = true;
                     if (count_completed >= count) {
@@ -804,10 +841,9 @@ function FilesystemBookReferenceManager(args) {
                     }
                 } else {
                     ++count;
-                    standardizeItem(item).then(std_item => {
+                    standardizeItem(item).then(to_store => {
                         ++count_completed;
-                        books.setChapter(std_item.store_info, std_item.chapter_info);
-                        console.log(count, count_completed, finished_counting);
+                        books.setChapter(to_store.store_info, to_store.chapter_info);
                         if (finished_counting && count_completed >= count) {
                             resolve(books);
                         }
@@ -828,38 +864,52 @@ function FilesystemBookReferenceManager(args) {
 }
 
 BookFactory = (function() {
-    'use strict';
-    function addFunctions(book_ref) {
-        if (!book_ref) {
-            return undefined;
-        }
-        
-        if (typeof book_ref.hasHelperFunctions === 'function') {
-            console.log('book_ref already had helper functions, not reapplying.');
-            return book_ref;
-        }
-        
-        book_ref.hasHelperFunctions = function () {};
-        
-        book_ref.eachChapter = function (each_fn, done_fn) {
-            var keys = Object.keys(book_ref),
+    'use strict';    
+    
+    var book_prototype = {
+        deleteChapter: function (chapter_to_del) {
+            this.eachChapter((chapter, index, noindex_arr) => {
+                if (chapter.path === chapter_to_del.path) {
+                    if (noindex_arr) { 
+                        noindex_arr.splice(index, 1);
+                    } else {
+                        delete this[index];
+                    }
+                    if (this.numChapters === 0) {
+                        this.hidden = true;
+                    }
+                    return true;
+                }
+            });
+        },
+        eachChapter: function (each_fn, done_fn) {
+            var keys = Object.keys(this),
                 length = keys.length,
                 i = 0;
-            var stop = keys.some(function (key) {
-                if (Book.isValidIndex(key) && book_ref.hasOwnProperty(key)) {
-                    return each_fn(book_ref[key], parseInt(key, 10));
+            var stop = keys.some((key) => {
+                if (Book.isValidIndex(key) && this.hasOwnProperty(key)) {
+                    return each_fn(this[key], parseInt(key, 10), null);
                 }
             });
             if (!stop) {
-                book_ref.noindex && book_ref.noindex.some(each_fn);
+                this.noindex && this.noindex.some(each_fn);
             }
             done_fn && done_fn();
-        };
-        
-        return book_ref;
-    }
+        },
+        get numChapters() {
+            var count = 0;
+            this.eachChapter(() => {
+                ++count;
+            });
+            return count;
+        }
+    };
     
-    return {addFunctions: addFunctions};
+    return {
+        getBlankBook: function () {
+            return Object.create(book_prototype);
+        }
+    };
 })();
 
 function StoredBooksListPageGenerator(args) {
@@ -870,6 +920,12 @@ function StoredBooksListPageGenerator(args) {
         stored_chapters_data_handle = args.stored_chapters_data_handle,
         player = args.player;
 
+    
+    fsReferenceManager.registerChangeCallback((books) => {
+        console.log('updating books ui list due to filesystem change', books);
+        this.refreshList(books);
+    })
+    
     this.registerEvents = function (_selectors) {
         selectors = _selectors;
         if (!selectors.page) {
@@ -877,7 +933,9 @@ function StoredBooksListPageGenerator(args) {
         }
         $(document).on('pagecreate', selectors.page, function () {
             console.log('pagecreate called for ' + selectors.page);
-            that.refreshList();
+            fsReferenceManager.collapseChapters().then(function (books) {
+                that.refreshList(books);
+            }).catch(e => console.error(e));
             
             if (player.getCurrentInfo()) { // TODO use events to make this more robust
                 $('.player-shortcut-footer').show();
@@ -894,21 +952,21 @@ function StoredBooksListPageGenerator(args) {
         });
     };
     
-    this.refreshList = function () {
+    this.refreshList = function (books) {
         if (!selectors) {
             console.warn('StoredBookPageGenerator: refreshList probably won\'t do anything: selectors is undefined');
         }
         var $list = $(selectors.list);
         $list.children('li.stored-book').remove();
-        fsReferenceManager.collapseChapters().then(function (books) {
-            console.log('books: ', books)
-            books.forEach(function (book) {
+        console.log('books: ', books)
+        books.forEach(function (book) {
+            if (!book.hidden) {
                 createListItem(book)
                     .addClass('filesystem_book')
                     .appendTo($list);
                 $list.listview('refresh');
-            });
-        }).catch(e => console.error(e));
+            }
+        });
     };
     
     function createListItem(book_obj) {
@@ -955,7 +1013,7 @@ function StoredBookPageGenerator(args) {
                     .show()
                     .click(function () {
                         player_data_handle(
-                            new PlayerInfo(ui_state.book, {path: user_progress.path}),
+                            new PlayerInfo(ui_state.book, user_progress),
                             {
                                 position: user_progress.position,
                                 resume_playback: true
@@ -1019,9 +1077,8 @@ EventManager = (function () {
 
     // I think this will memory leak due to strong references
     // but I don't know how to work around that.
-    var events;
     function EventManager () {
-        this.events = events = {};
+        this.events = {};
     }
     var namespace_rxp = /([^\.]*)(?:\.(.*))?/
 
@@ -1030,7 +1087,7 @@ EventManager = (function () {
             console.error('Wrong number of arguments!');
         }
         var event = new Event(eventName);
-        events[eventName] = event;
+        this.events[eventName] = event;
     };
     
     EventManager.prototype.registerEvents = function () {
@@ -1042,7 +1099,7 @@ EventManager = (function () {
     }
 
     EventManager.prototype.trigger = function (eventName, eventArgs) {
-        events[eventName].callbacks.forEach(function (callback_obj) {
+        this.events[eventName].callbacks.forEach(function (callback_obj) {
             callback_obj.callback(eventArgs);
         });
     };
@@ -1074,10 +1131,7 @@ EventManager = (function () {
                     callback_objs.splice(i, 1); // can't use delete here!
                 }
             }
-        },
-        getEventCallbacks = function (key) {
-            return events[key].callbacks;
-        }
+        };
     
     /*
      * Usage:
@@ -1086,6 +1140,9 @@ EventManager = (function () {
      *     #off('*.namespace) -> removes callbacks with matching namespace for all events
      */
     EventManager.prototype.off = function (event_string) {
+        var getEventCallbacks = (key => {
+            return this.events[key].callbacks;
+        });
         if (event_string[0] === '*') {
             var namespace = event_string.slice(2);
             Object.keys(this.events).forEach(function (key) {
@@ -1095,8 +1152,6 @@ EventManager = (function () {
             var event_match = event_string.match(namespace_rxp),
                 event_name = event_match[1],
                 namespace  = event_match[2];
-
-
             if (!namespace) {
                 this.events[event_name].callbacks = [];
             } else {
@@ -1203,10 +1258,10 @@ function Player(args) {
             error_str = 'Something went wrong while loading audio into the player.'
         }
         console.error(error_str);
-        alert(error_str);
+        event_manager.trigger('loaderror', error_str);
     }
     
-    event_manager.registerEvents('loadedmetadata', 'loadeddata', 'play', 'pause', 'timeupdate', 'ended', 'finishedqueue');
+    event_manager.registerEvents('loadedmetadata', 'loadeddata', 'play', 'pause', 'timeupdate', 'ended', 'finishedqueue', 'loaderror');
     
     this.on = function (eventName, callback) {
         event_manager.on(eventName, callback);
@@ -1451,6 +1506,11 @@ function BookPlayerPageGenerator(args) {
                 $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
             });
             
+            player.on('loaderror.player-html', function (error_str) {
+                alert(error_str);
+                $.mobile.back();
+            })
+            
             player.on('loadeddata.player-html', function () {
                 updateUIandContext(selectors, controls);
             });
@@ -1498,6 +1558,7 @@ function BookPlayerPageGenerator(args) {
     };
     
     function updateUIandContext (selectors, controls) {
+        console.log('UpdateUIandContext with currentInfo:', player.getCurrentInfo());
         if (player.getCurrentInfo()) {
             $(selectors.header).text(player.getCurrentInfo().chapter.name);
             
@@ -1537,7 +1598,7 @@ function SettingsManager (args) {
                 resolve(settings[key]);
             } else {
                 async_storage.getItem(st_settings_key, _settings => {
-                    settings = _settings;
+                    settings = _settings || generateDefaultSettings();
                     resolve(settings[key]);
                 });
             }
