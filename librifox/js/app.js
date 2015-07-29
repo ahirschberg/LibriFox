@@ -346,9 +346,9 @@ function BookReferenceManager(args) {
                 book_ref = {};
             }
             if (!data_obj) {
-                delete book_ref[PlayerProgressManager.USER_PROGRESS_KEY];
+                delete book_ref.user_progress;
             } else {
-                book_ref[PlayerProgressManager.USER_PROGRESS_KEY] = data_obj;
+                book_ref.user_progress = data_obj;
             }
             
             store_item(JSON_PREFIX + book_id, book_ref);
@@ -356,7 +356,7 @@ function BookReferenceManager(args) {
     }
     
     this.storeChapterReference = function (book_obj, chapter_obj, path, options) {
-        options = options || {}
+        options = options || {};
         if (!Book.isValidIndex(book_obj.id)) {
             throw new Error('book_obj.id is not a valid index: ' + book_obj.id);
         }
@@ -726,6 +726,8 @@ function FilesystemBookReferenceManager(args) {
                     obj.title = store_info.book_title
                     obj.id = store_info.id
                 }
+                obj.hidden = false;
+                
                 if (Book.isValidIndex(store_info.index)) {
                     obj[store_info.index] = chapter_info;
                 } else {
@@ -954,7 +956,7 @@ function StoredBooksListPageGenerator(args) {
     
     this.refreshList = function (books) {
         if (!selectors) {
-            console.warn('StoredBookPageGenerator: refreshList probably won\'t do anything: selectors is undefined');
+            console.warn('refreshList probably won\'t do anything: selectors is undefined');
         }
         var $list = $(selectors.list);
         $list.children('li.stored-book').remove();
@@ -1008,7 +1010,8 @@ function StoredBookPageGenerator(args) {
             $list.children('li.stored-chapter').remove();
             
             var user_progress = ui_state.book.user_progress;
-            if (user_progress) {
+            console.log('User progress: ', user_progress);
+            if (user_progress && user_progress.path) {
                 $('.continue-playback')
                     .show()
                     .click(function () {
@@ -1019,10 +1022,11 @@ function StoredBookPageGenerator(args) {
                                 resume_playback: true
                             })
                     });
+            } else {
+                $('.continue-playback').hide();
             }
             
             ui_state.book.eachChapter(function (chapter_ref, index) {
-                console.log(chapter_ref);
                 createListItem(chapter_ref, index).bind('taphold', function () {
                     var that = this;
                     $(selectors.book_actions_popup).popup('open', {
@@ -1191,21 +1195,27 @@ function PlayerProgressManager (args) {
     
     var write = function (curr_info) { // curr_info is an optional argument
         var curr_info = curr_info || player.getCurrentInfo();
-        console.log(player.getCurrentInfo());
         lastPosition = player.position() || 0;
         
         if (curr_info) {
             console.log('writing ', curr_info)
-            referenceManager.updateUserData(curr_info.book.id, {path: curr_info.chapter.path, name: curr_info.chapter.name, position: lastPosition});
+            var info_obj = {
+                path: curr_info.chapter.path,
+                name: curr_info.chapter.name,
+                position: lastPosition
+            };
+            referenceManager.updateUserData(curr_info.book.id, info_obj);
+            player.getCurrentInfo().book.user_progress = info_obj;
+            
         } else {
             console.log('no player info, nothing to write.');
         }
     },
         delete_progress = function (old_info) {
             referenceManager.updateUserData(old_info.book.id, null);
+            old_info.book.user_progress = null;
         }
 }
-PlayerProgressManager.USER_PROGRESS_KEY = 'user_progress';
 
 function Player(args) {
     "use strict";
