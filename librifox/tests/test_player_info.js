@@ -1,20 +1,20 @@
 describe('PlayerInfo()', function () {
     describe('#next()', function () {
         it('goes to the next chapter in sequence', function () {
-            var book = BookFactory.addFunctions({
-                0: {
-                    name: 'Chapter 01',
-                    path: 'path0/to'
-                },
-                1: {
-                    name: 'Chapter 02',
-                    path: 'path1/to'
-                },
-                noindex: [{
-                    name: 'Unindexed Chapter',
-                    path: 'path2/to'
-                }]
-            });
+            var book = (new BookFactory()).getBlankBook();
+            book[0] = {
+                name: 'Chapter 01',
+                path: 'path0/to'
+            };
+            book[1] = {
+                name: 'Chapter 02',
+                path: 'path1/to'
+            };
+            book.noindex = [{
+                name: 'Unindexed Chapter',
+                path: 'path2/to'
+                }];
+            
             var pi = new PlayerInfo(book, book[0]);
             expect(pi.next()).to.eql(book[1]);
             expect(pi.next()).to.eql(book.noindex[0]);

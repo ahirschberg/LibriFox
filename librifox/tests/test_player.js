@@ -1,5 +1,7 @@
 describe('Player()', function () {
-    var p;
+    'use strict';
+    
+    var p, player_info, spy_pi_next;
     beforeEach(function () {
         p = new Player({
             createObjectURL: function (file) {return file.path},
@@ -9,7 +11,28 @@ describe('Player()', function () {
                 }
             }
         });
+        
+        var chapter0 = {
+                path: 'path0/to'
+            },
+            chapter1 = {
+                path: 'path1/to'
+            },
+            book = {
+                0: chapter0,
+                1: chapter1
+            }
+        player_info = {
+            book: book,
+            chapter: chapter0,
+            next: () => {}
+        }
+        spy_pi_next = sinon.spy(player_info, 'next');
     });
+    
+    afterEach(function () {
+        spy_pi_next.reset();
+    })
     
     // fire event on element
     function fireEvent(name, element) {
@@ -19,19 +42,11 @@ describe('Player()', function () {
     }
     
     describe('#queueBook()', function () {
-        it('sets audio element src to given file', function () {
-            var book_ref = {
-                0: {
-                    path: 'path1/to',
-                    name: 'Introduction'
-                },
-                title: 'FooBar',
-                id: 9999
-            }
-            p.queueBook(book_ref, 0);
-            expect(p.getAudioElement().src).to.match(/path1\/to$/); // server adds localhost to url
+        it('sets audio element src to path of selected chapter', function () {
+            p.queueBook(player_info);
+            expect(p.getAudioElement().src).to.match(/path0\/to$/); // server adds localhost to url
         });
-        it('plays the next chapter when the current one completes', function () {
+        it('calls PlayerInfo#next() when chapter completes', function () {
             var book_ref = {
                 0: {
                     path: 'path1/to',
@@ -44,9 +59,9 @@ describe('Player()', function () {
                 title: 'FooBar',
                 id: 9999
             }
-            p.queueBook(book_ref, 0);
+            p.queueBook(player_info);
             fireEvent('ended', p.getAudioElement());
-            expect(p.getAudioElement().src).to.match(/path2\/to$/);
+            
         })
     });
     
@@ -71,9 +86,9 @@ describe('Player()', function () {
                 title: 'FooBar',
                 id: 9999
             }
-            p.queueBook(book_ref, 0);
+            p.queueBook(player_info);
             p.next();
-            expect(p.getAudioElement().src).to.match(/path2\/to$/);
+            expect(spy_pi_next).to.have.been.calledOnce;
         })
     })
     

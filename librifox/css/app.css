@@ -32,9 +32,11 @@ p {
     height: inherit;
 }
 
-.noAvailableBooks {
+.no-available-books {
     margin: 20px;
     text-align: center;
+    
+    display: none;
 }
 
 .showFullText {
