@@ -310,17 +310,13 @@ function BookStorageManager(args) {
 
     this.write = function (blob, path, success_fn) {
         console.log('writing:', blob, path);
-        var request = deviceStoragesManager.getStorage().addFile(blob, path);
-        if (request) {
-            request.onsuccess = function () {
-                console.log('wrote: ' + this.result);
-                success_fn && success_fn(this.result);
-            };
-            request.onerror = function () {
-                console.warn('failed to write ' + path + ': ', this.error);
-                alert('failed to write file: ' + this.error.name);
-            }
-        }
+        deviceStoragesManager.getStorage().addFile(blob, path).then(function (result) {
+            console.log('wrote: ' + result);
+            success_fn && success_fn(result);
+        }).catch(function (error) {
+            console.warn('Failed to write ' + path + ': ', error);
+            alert('Failed to write file: ' + error.name);
+        });
     };
     
     this.getChapterFilePath = function (book_id, chapter_index) {
@@ -609,67 +605,75 @@ var MediaDBMetadataParser = (function () {
     };
 })()
 
-var MediaManager = (function () {
-    'use strict';
-    var db,
-        event_manager;
-    
-    function MediaManager() {
-        db = new MediaDB("sdcard", MediaDBMetadataParser.getParser(ID3Parser), {includeFilter: /[^\.]+\.lfa$/, version: 1});
+function MediaManager() {
+        'use strict';
+        var db,
+            event_manager,
+            available = false;
+
+        db = new MediaDB("sdcard", MediaDBMetadataParser.getParser(ID3Parser), {
+            includeFilter: /[^\.]+\.lfa$/,
+            version: 1
+        });
         db.addEventListener('created', createdEvent);
         db.addEventListener('deleted', deletedEvent);
-        db.addEventListener('opening', debug_print_cbk);
-        db.addEventListener('upgrading', debug_print_cbk);
-        db.addEventListener('enumerable', debug_print_cbk);
-        db.addEventListener('ready', debug_print_cbk);
-        
+        db.addEventListener('ready', (event) => {
+            console.log('MediaDB has become available', event);
+            available = true;
+        });
+        db.addEventListener('unavailable', (event) => {
+            console.log('MediaDB has become unavailable', event);
+            available = false;
+        });
+
         event_manager = new EventManager();
         event_manager.registerEvents('created', 'deleted');
-        
-        MediaManager.prototype.db = db;
-    }
-    
-    function createdEvent(event) {
-        console.log('created', event);
-        event_manager.trigger('created', event);
-    }
-    
-    function deletedEvent(event) {
-        console.log('deleted', event);
-        event_manager.trigger('deleted', event);
-    }
-    
-    MediaManager.prototype.on = function (eventName, callback) {
-        event_manager.on(eventName, callback);
-    }
-    MediaManager.prototype.off = function (eventName) {
-        event_manager.off(eventName);
-    }
-    
-    MediaManager.prototype.enumerate = function (callback) {
-        db.enumerate((item) => {
-            callback(item);
-        });
-    }
-    
-    MediaManager.prototype.__debug__deleteDatabase = function () {
-        var name = db.dbname;
-        db.close();
-        
-        var req = indexedDB.deleteDatabase(name);
-        req.onsuccess = function () {
-            console.log("Deleted database successfully");
-        };
-        req.onerror = function () {
-            console.log("Couldn't delete database");
-        };
-        req.onblocked = function () {
-            console.log("Couldn't delete database due to the operation being blocked");
-        };
-    }
-    
-    return MediaManager;
-})();
+
+        this.db = db;
+
+        function createdEvent(event) {
+            console.log('created', event);
+            event_manager.trigger('created', event);
+        }
+
+        function deletedEvent(event) {
+            console.log('deleted', event);
+            event_manager.trigger('deleted', event);
+        }
+
+        this.on = function (eventName, callback) {
+            event_manager.on(eventName, callback);
+        }
+        this.off = function (eventName) {
+            event_manager.off(eventName);
+        }
+
+        this.enumerate = function (callback) {
+            db.enumerate((item) => {
+                callback(item);
+            });
+        }
+
+        Object.defineProperty(this, 'available', {
+            get: () => available
+        })
+
+        this.__debug__deleteDatabase = function () {
+            var name = db.dbname;
+            db.close();
+
+            var req = indexedDB.deleteDatabase(name);
+            req.onsuccess = function () {
+                console.log("Deleted database successfully");
+            };
+            req.onerror = function () {
+                console.log("Couldn't delete database");
+            };
+            req.onblocked = function () {
+                console.log("Couldn't delete database due to the operation being blocked");
+            };
+        }
+        }
 
 function FilesystemBookReferenceManager(args) {
     'use strict';
@@ -859,6 +863,7 @@ function BookFactory (fileManager) {
                             options.file_delete_success && options.file_delete_success();
                         }).catch(e => {
                             console.warn('Error deleting file from disk:', e);
+                            options.file_delete_error && options.file_delete_error(e)
                         })
                     } else {
                         console.log('not deleting from disk');
@@ -987,24 +992,13 @@ function StoredBookPageGenerator(args) {
             $list.children('li.stored-chapter').remove();
             
             var user_progress = ui_state.book.user_progress;
-            console.log('User progress: ', user_progress);
-            if (user_progress && user_progress.path) {
-                $('.continue-playback')
-                    .show()
-                    .click(function () {
-                        player_data_handle(
-                            new PlayerInfo(ui_state.book, user_progress),
-                            {
-                                position: user_progress.position,
-                                resume_playback: true
-                            })
-                    });
-            } else {
-                $('.continue-playback').hide();
-            }
+            var user_progress_viable = false;
             
-            ui_state.book.eachChapter(function (chapter_ref, index) {
-                createListItem(chapter_ref, index).bind('taphold', function () {
+            ui_state.book.eachChapter(function (chapter_ref) {
+                if (user_progress && !user_progress_viable) {
+                    user_progress_viable = (chapter_ref.path === user_progress.path);
+                }
+                createListItem(chapter_ref, user_progress).bind('taphold', function () {
                     var that = this;
                     $(selectors.book_actions_popup).popup('open', {
                         transition: 'pop',
@@ -1016,12 +1010,31 @@ function StoredBookPageGenerator(args) {
                             file_delete_success: function () {
                                 $(that).remove();
                                 $(selectors.page + ' ul').listview('refresh');
+                            },
+                            file_delete_error: function (error) {
+                                alert('Error deleting file: ' + error.message);
                             }
                         });
                         $(selectors.book_actions_popup).popup('close');
                     });
                 }).appendTo($list);
             });
+            var $resume_progress;
+            if (user_progress_viable) { // if the user progress still matches a chapter path
+                $('.continue-playback')
+                    .click(function () {
+                        player_data_handle(
+                            new PlayerInfo(ui_state.book, user_progress), {
+                                position: user_progress.position,
+                                resume_playback: true
+                            }
+                        )
+                    })
+                    .show();
+            } else {
+                $('.continue-playback').hide();
+            }
+            
             $list.listview('refresh');
         });
         $(document).on('pagecreate', selectors.page, function () {
@@ -1033,19 +1046,36 @@ function StoredBookPageGenerator(args) {
         });
     };
     
-    function createListItem(chapter_ref) {
+    function createListItem(chapter_ref, user_progress) {
         var link = $('<a/>', {
             'class': 'showFullText',
             href: 'player.html',
-            text: chapter_ref.name,
-            click: function () {
-                player_data_handle(new PlayerInfo(ui_state.book, chapter_ref), {resume_playback: false});
-            }
+            text: chapter_ref.name
         });
-        return $('<li/>', {
+        
+        var resume_playback_li = false;
+        if (user_progress && chapter_ref.path === user_progress.path) {
+            resume_playback_li = true;
+            link.text('\u25BA ' + link.text())
+                .click(function () {
+                    player_data_handle(
+                        new PlayerInfo(ui_state.book, user_progress), {
+                            position: user_progress.position,
+                            resume_playback: true
+                        }
+                    )
+                });
+        } else {
+            link.click(function () {
+                player_data_handle(new PlayerInfo(ui_state.book, chapter_ref), {resume_playback: false});
+            });
+        }
+        var $chapter_li = $('<li/>', {
             'class': 'stored-chapter',
             html: link
         });
+        
+        return $chapter_li;
     }
 }
 EventManager = (function () {
@@ -1236,18 +1266,18 @@ function Player(args) {
             console.warn('Player error:', event);
         }
     }
-    function onFileLoadError (path) {
+    function onFileLoadError (path, error) {
         var error_str;
         if (that.getCurrentInfo()) {
             error_str = 'Error loading chapter "' +
                         that.getCurrentInfo().chapter.name +
-                        '" with path ' + that.getCurrentInfo().chapter.path +
-                        '. Is the file corrupted?'
+                        '" with path ' + that.getCurrentInfo().chapter.path + ':'
         } else if (path) {
             error_str = 'Error loading file from path ' + path
         } else {
             error_str = 'Something went wrong while loading audio into the player.'
         }
+        error_str += ' ' + error.name
         console.error(error_str);
         event_manager.trigger('loaderror', error_str);
     }
@@ -1309,8 +1339,8 @@ function Player(args) {
             function (file) {
                 console.log(file.type, file);
                 getAudioElement().src = create_object_url_fn(file);
-            }, () => {
-                onFileLoadError(path);
+            }, error => {
+                onFileLoadError(path, error);
             }
         );
     }
@@ -1468,7 +1498,7 @@ function BookPlayerPageGenerator(args) {
             
             var controls = selectors.controls;
             if (player_context) {
-                if (!player.getCurrentInfo() ||   // if nothing is playing 
+                if (!player.getCurrentInfo() ||  // if nothing is playing 
                                                  // OR
                     (player.getCurrentInfo() &&  // if chapter playing doesn't match chapter  
                         !player.getCurrentInfo() // requested via player_context...
@@ -1641,12 +1671,14 @@ function DeviceStoragesManager(args) { // untested
     var settings = args.settings,
         downloads_storage_index,
         downloads_storage_name,
-        filemanager_wrapped_storage,
+        fileManager = args.fileManager,
         nav = args.navigator || navigator;
     
     settings.get('downloads_storage_device_index').then(value => {
         this.setDownloadsDeviceByIndex(value || 0);
     });
+    
+
     
     this.setDownloadsDeviceByIndex = function (index) {
         if (isFinite(index) && Math.floor(index) == index) {
@@ -1675,10 +1707,7 @@ function DeviceStoragesManager(args) { // untested
     };
     
     this.getStorage = function () {
-        if (!filemanager_wrapped_storage) {
-            filemanager_wrapped_storage = new FileManager(nav.getDeviceStorage('sdcard'));
-        }
-        return filemanager_wrapped_storage;
+        return fileManager;
     }
     
     this.eachDevice = function (func_each) {
@@ -1686,57 +1715,10 @@ function DeviceStoragesManager(args) { // untested
     }
 }
 
-function FileManager(storage_device) {
-    var that = this;
-
-    this.displayAppFiles = function () {
-        var times_called = 0;
-        var enumeration_cb = function (result) {
-            times_called++;
-            fileListItem = $('<li>' + result.name + '</li>');
-            $("#downloadedFiles").append(fileListItem);
-        }
-        var done_cb = function () {
-            if (times_called < 1) {
-                $("#downloadedFiles").append('<li>No files found</li>');
-            }
-            $("#downloadedFiles").listview('refresh');
-        }
-
-        $("#downloadedFiles").empty();
-        that.enumerateFiles({
-            enumerate_path: APP_DOWNLOADS_DIR,
-            func_each: enumeration_cb,
-            func_done: done_cb,
-        });
-    }
-
-    this.enumerateFiles = function (args) {
-        var match_rxp = args.match,
-            enumerate_path = args.enumerate_path || undefined,
-            func_each = args.func_each,
-            func_done = args.func_done,
-            func_error = args.func_error;
-
-        var request = storage_device.enumerate(enumerate_path);
-        request.onsuccess = function () {
-            if (this.result) {
-                var matched_name = this.result.name.match(match_rxp);
-                if (matched_name || !match_rxp) {
-                    console.log('calling func_each');
-                    func_each && func_each(this.result, matched_name);
-                }
-                this.continue();
-            } else {
-                console.log('calling func_done');
-                func_done && func_done();
-            }
-        };
-        request.onerror = function () {
-            console.log(this.error);
-            func_error && func_error();
-        };
-    };
+function FileManager(args) {
+    var that = this,
+        storage_device = args.storage_device,
+        mediaManager = args.mediaManager;
     
     this.testForFile = function (path, result_callback) {
         var request = storage_device.get(path);
@@ -1750,39 +1732,39 @@ function FileManager(storage_device) {
     };
 
     this.addFile = function (blob, filepath) {
-        return storage_device.addNamed(blob, filepath);
+        var deferred = {};
+        deferred.promise = new Promise((resolve, reject) => {
+            deferred.resolve = resolve;
+            deferred.reject = reject;
+        });
+        
+        if (!mediaManager.available) {
+            var error = {
+                name: 'The storage device is not currently available. Has it been mounted as a USB device or removed?'
+            }
+            deferred.reject(error);
+        } else {
+            var req = storage_device.addNamed(blob, filepath);
+            req.onsuccess = function () {
+                deferred.resolve(this.result);
+            }
+            req.onerror = function () {
+                deferred.reject(this.error);
+            }
+        }
+        
+        return deferred.promise;
     };
     
     this.deleteFile = function (filepath) {
         return new Promise(function (resolve, reject) {
             var req = storage_device.delete(filepath);
             req.onsuccess = function () {
-                resolve.apply(this, arguments);
+                console.log(this, arguments);
+                resolve(this.result)
             }
             req.onerror = function () {
-                reject.apply(this, arguments);
-            }
-        });
-    }
-    
-    this.deleteAllAppFiles = function () {
-        var enumeration_cb = function (result) {
-            console.log(result.name + ' will be deleted');
-            var request = storage_device.delete(result.name);
-
-            request.onsuccess = function () {
-                console.log("File deleted");
-            }
-
-            request.onerror = function () {
-                console.log("Unable to delete the file: " + result.name, this.error);
-            }
-        }
-        that.enumerateFiles({
-            match: new RegExp(APP_DOWNLOADS_DIR + "\/.*"),
-            func_each: enumeration_cb,
-            func_done: function () {
-                that.displayAppFiles();
+                reject(this.error)
             }
         });
     }
@@ -1796,7 +1778,7 @@ function FileManager(storage_device) {
         };
         request.onerror = function () {
             console.log('Error loading from ' + path, this.error);
-            error && error(this);
+            error && error(this.error);
         };
     }
     
@@ -1982,14 +1964,18 @@ function createApp () {
     var settings = new SettingsManager({
             asyncStorage: asyncStorage
         }),
-        fileManager = new FileManager(lf_getDeviceStorage()),
         mediaManager = new MediaManager(),
+        fileManager = new FileManager({
+            storage_device: lf_getDeviceStorage(),
+            mediaManager: mediaManager
+        }),
         httpRequestHandler = new HttpRequestHandler(),
         player = new Player({
             fileManager: fileManager
         }),
         deviceStoragesManager = new DeviceStoragesManager({
-            settings: settings
+            settings: settings,
+            fileManager: fileManager
         }),
         bookReferenceManager = new BookReferenceManager({
             asyncStorage: asyncStorage,
