@@ -19,6 +19,8 @@ module.exports = function(config) {
       'jquerymobile/jquery.mobile-1.4.5.min.js',
       'js/*.js',
       'tests/*.js'
+      //'tests/helper_objects.js',
+      //'tests/test_book_download_manager.js'
     ],
 
 
@@ -37,7 +39,7 @@ module.exports = function(config) {
     // test results reporter to use
     // possible values: 'dots', 'progress'
     // available reporters: https://npmjs.org/browse/keyword/karma-reporter
-    reporters: ['progress'],
+    reporters: ['dots'],
 
 
     // web server port

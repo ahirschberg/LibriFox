@@ -32,24 +32,15 @@ p {
     height: inherit;
 }
 
-.noAvailableBooks {
+.no-available-books {
     margin: 20px;
     text-align: center;
+    
+    display: none;
 }
 
 .showFullText {
     white-space: normal !important;
-}
-
-li.filesystem_book {
-    font-style: italic;
-    border-width: 2px 0 0 0;
-    border-color: rgba(237, 135, 95, 0.48);
-    border-style: solid; 
-    border-collapse: collapse;
-}
-li.filesystem_book:last-child {
-    border-width: 2px 0;
 }
 
 .header-text-no-cutoff {
@@ -76,4 +67,23 @@ li.filesystem_book:last-child {
 }
 .player-controls .total-duration-readout {
     float: right;
+}
+
+.player-info {
+    margin: 10px;
+}
+
+.player-book-title {
+    color: #505050;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.player-chapter-title {
+    font-size: 1.5em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

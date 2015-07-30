@@ -40,54 +40,40 @@ var WEB_RESP = {
 var BOOK_OBJECT = new Book({json: WEB_RESP.book_json});
 
 var createFakeAsyncStorage = function () {
-    var fake_store = {},
-        callbacks = [],
-        instant = false;
+    var fake_store = {};
     return {
         getItem: function (key, callback) {
-            var func = function () {
+            callback && setTimeout(function () {
                 callback(fake_store[key] || null);
-            };
-            
-            if (instant) {
-                func();
-            } else {
-                callbacks.push(func);
-            }
+            });
         },
-        setItem: function (key, value) {
+        setItem: function (key, value, callback) {
             fake_store[key] = value;
+            callback && setTimeout(callback, 0);
         },
         removeItem: function (key, callback) {
             delete fake_store[key];
-            callback && callback();
+            callback && setTimeout(callback, 0);
         },
-        length: function (callback) { // called synchronously in mock implementation
-            callback(Object.keys(fake_store).length);
+        length: function (callback) {
+            callback && setTimeout(() => {
+                console.log('currently fake store is ', fake_store);
+                callback(Object.keys(fake_store).length)
+            }, 0);
         },
         key: function (index, callback) {
-            var func = function () {
-                callback(Object.keys(fake_store)[index]);
-            };
-            
-            if (instant) {
-                func();
-            } else {
-                callbacks.push(func);
-            }
+             callback && setTimeout(() => {
+                 callback(Object.keys(fake_store)[index]);
+             });
         },
-        _set_instant: function () { // sets callbacks to eval instantaneously
-            instant = true;
-        },
-        _call_pending_callbacks: function () {
-            callbacks.forEach(function (callback) {
-                callback();
-            });
-            callbacks = [];
+        _print_store: function () {
+            console.log(fake_store);
         },
         _reset_store: function (obj_arr) {
-            instant = false;
-            fake_store = obj_arr || [];
+            fake_store = obj_arr || {};
         }
     };
 };
+
+var PROMISE_CATCH = (e => console.error(e.message + '\n\n', e.stack));
+var PROMISE_CATCH_THROW = (e => setTimeout(() => {throw e}));

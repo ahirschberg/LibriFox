@@ -26,7 +26,10 @@ describe('PlayerProgressManager', function () {
             getCurrentInfo: function () {
                 return {
                     book: {id: 1337},
-                    curr_index: 0
+                    chapter: {
+                        name: 'A Chapter',
+                        path: 'path/to'
+                    }
                 }
             },
             _event_manager: event_manager
@@ -60,7 +63,7 @@ describe('PlayerProgressManager', function () {
         })
         describe('pause', function () {
             it('writes when time is >1 second off from last written time', function () {
-                var spy = spy_updateUserData.withArgs(1337, 0)
+                var spy = spy_updateUserData.withArgs(1337)
                 player.position(0);
                 player.pause();
                 expect(spy).to.not.have.been.called;
@@ -82,9 +85,9 @@ describe('PlayerProgressManager', function () {
             })
         })
         describe('finishedqueue', function () {
-            it('writes each time with -1 as chapter index', function () {
+            it('writes null user data', function () {
                 player._event_manager.trigger('finishedqueue', player.getCurrentInfo());
-                expect(spy_updateUserData.withArgs(1337, -1)).to.have.been.calledOnce
+                expect(spy_updateUserData).to.have.been.calledWith(1337, null);
             })
         })
     })

@@ -1,9 +1,14 @@
 describe('SearchedBookPageGenerator()', function () {
     "use strict";
     describe('#generatePage()', function () {
-        var dlSpy, book_obj, cpg;
+        var spy_downloadChapter, spy_forceDownloadChapter, book_obj, cpg, old_confirm, confirm_spy, confirm_result, dlmanager_call_error_cbk;
 
-        before(function () {     
+        before(function () {
+            
+            old_confirm = window.confirm;
+            window.confirm = (() => confirm_result);
+            confirm_spy = sinon.spy(window, 'confirm');
+            
             var ul = $('<ul data-role="listview" id="chapters-list"></ul>');
             ul.appendTo('body');
             ul.listview(); // initializes jQuery mobile listview - necessary for #listview('refresh') within #generatePage
@@ -16,10 +21,15 @@ describe('SearchedBookPageGenerator()', function () {
             }
 
             var dlManager = {
-                downloadChapter: function () {}
+                downloadChapter: function (args) {
+                    if (dlmanager_call_error_cbk) {
+                        args.callbacks.error();
+                    }
+                },
+                forceDownloadChapter: () => {}
             };
-            dlSpy = sinon.spy(dlManager, 'downloadChapter');
-
+            spy_downloadChapter = sinon.spy(dlManager, 'downloadChapter');
+            spy_forceDownloadChapter = sinon.spy(dlManager, 'forceDownloadChapter');
             cpg = new SearchedBookPageGenerator({
                 httpRequestHandler: new StubHttpRequestHandler(),
                 selectors: {
@@ -28,9 +38,16 @@ describe('SearchedBookPageGenerator()', function () {
                 bookDownloadManager: dlManager
             });
         });
+        
+        after(function () {
+            window.confirm = old_confirm;
+        })
 
         beforeEach(function () {
-            dlSpy.reset();
+            spy_downloadChapter.reset();
+            confirm_spy.reset();
+            confirm_result = false;
+            dlmanager_call_error_cbk = false;
             book_obj = Object.create(BOOK_OBJECT); // because chapters are added, don't use global
             $('#chapters-list').empty();
         });
@@ -40,24 +57,26 @@ describe('SearchedBookPageGenerator()', function () {
                 cpg.generatePage(book_obj);
                 expect($('#chapters-list').children()[0].textContent).match(/download all chapters/i);
             });
-            it('downloads all chapters when clicked', function () {
+            it('asks the user to confirm before downloading', function () {
+                cpg.generatePage(book_obj);
+                var $download_all_btn = $($('#chapters-list').children()[0]);
+                $download_all_btn.trigger('click');
+                expect(confirm_spy).to.have.been.calledOnce;
+            })
+            it('downloads all chapters when user confirms yes', function () {
+                confirm_result = true; // simulate confirm yes button press
                 cpg.generatePage(book_obj);
                 var chapters_list_children = $('#chapters-list').children(),
                     $download_all_btn = $(chapters_list_children[0]);
 
                 $download_all_btn.trigger('click');
-                var first_call = {
-                        book_object: dlSpy.firstCall.args[0],
-                        chapter_object: dlSpy.firstCall.args[1],
-                        callback: dlSpy.firstCall.args[2]
-                    },
+                var first_call = spy_downloadChapter.firstCall.args[0],
                     chapter_1_obj = Chapter.parseFromXML(WEB_RESP.book_xml)[0];
                 
-                // wish there was a better way to flexibly check args
-                expect(dlSpy.callCount).to.equal(2);
-                expect(book_obj).eql(first_call.book_object);
-                expect(chapter_1_obj).eql(first_call.chapter_object);
-                expect(first_call.callback).to.be.a('function');
+                expect(spy_downloadChapter.callCount).to.equal(2);
+                expect(book_obj).eql(first_call.book);
+                expect(chapter_1_obj).eql(first_call.chapter);
+                expect(first_call.callbacks.progress).to.be.a('function');
             });
             it('adds chapters array to book object', function () {
                 console.log(book_obj.chapters);
@@ -83,6 +102,21 @@ describe('SearchedBookPageGenerator()', function () {
                     expect($(this).attr('chapter-index')).equal(i + '');
                 });
             });
+            it('asks the user to confirm overwrite if file to be downloaded already exists', function () {
+                cpg.generatePage(book_obj);
+                dlmanager_call_error_cbk = true;
+                $('[chapter-index=0]').trigger('click');
+
+                expect(confirm_spy).to.have.been.calledOnce;
+            });
+            it('forces download if user confirms overwrite', function () {
+                cpg.generatePage(book_obj);
+                dlmanager_call_error_cbk = true;
+                confirm_result = true;
+                $('[chapter-index=0]').trigger('click');
+
+                expect(spy_forceDownloadChapter).to.have.been.calledOnce;
+            })
         });
     });
 });

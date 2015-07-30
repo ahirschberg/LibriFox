@@ -1,18 +1,16 @@
 describe('SearchResultsPageGenerator()', function () {
+    'use strict';
     describe('#generatePage()', function () {
         var spg,
-            bsrSelector,
             books_response;
 
         var httpReqUrl;
 
 
         before(function () {
-            bsrSelector = '#bookSearchResults';
-
-            var ul = $('<ul data-role="listview" id="bookSearchResults"></ul>');
-            ul.appendTo('body');
-            ul.listview();
+            var $el = $('<ul data-role="listview" id="results-listing"></ul><div class="no-results"/>');
+            $el.appendTo('body');
+            $('#results-listing').listview();
 
             books_response = [
                 WEB_RESP.book_json,
@@ -39,17 +37,20 @@ describe('SearchResultsPageGenerator()', function () {
 
             spg = new SearchResultsPageGenerator({
                 'httpRequestHandler': new StubHttpRequestHandler(),
-                'results_selector': bsrSelector
             });
+            spg.registerEvents({
+                results_list: '#results-listing',
+                no_results_msg: '.no-results'
+            })
         });
 
         afterEach(function () {
-            $(bsrSelector).empty(); // I think Mocha / Karma might also clear #bSR, commenting this line has no effect on test outcomes
+            $('#results-listing').empty(); // I think Mocha / Karma might also clear #bSR, commenting this line has no effect on test outcomes
         });
 
         it('appends elements containing book results to selected parent element', function () {
             spg.displayResults('abc');
-            expect($(bsrSelector).children().length).equal(2);
+            expect($('#results-listing').children().length).equal(2);
         });
 
         it('generates a LibriVox API url', function () {
@@ -62,7 +63,7 @@ describe('SearchResultsPageGenerator()', function () {
         it('populates elements with book titles and descriptions', function () {
             spg.displayResults('abc');
 
-            var secondBookResult = $(bsrSelector).children()[1];
+            var secondBookResult = $('#results-listing').children()[1];
             var secondBookText = $(secondBookResult).text(); // these are implementation details, should the test just check whether the text exists?
 
             expect(secondBookText).match(/placeholder book/);
@@ -70,21 +71,23 @@ describe('SearchResultsPageGenerator()', function () {
         });
 
         it('displays a message if no books are found', function () {
+            expect($('.no-results').css('display')).to.equal('none');
             spg.displayResults('NORESULT');
-
-            expect($(bsrSelector).html()).match(/no books found/i);
+            expect($('.no-results').css('display')).to.equal('block');
+            spg.displayResults('valid search');
+            expect($('.no-results').css('display')).to.equal('none');
         });
 
         it('clears results from a previous search before appending new elements', function () {
             spg.displayResults('abc');
             spg.displayResults('def');
 
-            expect($(bsrSelector).children().length).to.equal(2);
+            expect($('#results-listing').children().length).to.equal(2);
 
             spg.displayResults('NORESULT');
             spg.displayResults('abc');
 
-            expect($(bsrSelector).text()).not.match(/no books found/i);
+            expect($('#results-listing').text()).not.match(/no books found/i);
         });
     });
     // TODO test #registerEvents?
