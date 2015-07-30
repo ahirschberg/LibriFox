@@ -1876,7 +1876,7 @@ function SearchResultsPageGenerator(args) {
                     positionTo: 'window',
                     transition: 'pop'
                 });
-            }, 500)
+            }, 500) // delay to give the keyboard time to retract.
             
         }
     }
