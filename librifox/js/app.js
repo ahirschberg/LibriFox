@@ -90,6 +90,11 @@ function SearchedBookPageGenerator(args) {
             getChaptersFromFeed(book.id, function (chapters) {
                 book.chapters = chapters;
                 showLocalChapters(book);
+            }, function (err) {
+                console.error('Error getting chapters for ' + book.title, err);
+                $error_li = $('<li/>').text('Error getting chapters: ' + err.name);
+                $(selectors.list).append($error_li);
+                $(selectors.list).listview('refresh');
             });
         }
         
@@ -199,11 +204,18 @@ function SearchedBookPageGenerator(args) {
         return bookDownloadManager.downloadChapter(args);
     }
 
-    function getChaptersFromFeed(book_id, callback_func) {
+    function getChaptersFromFeed(book_id, callback_func, err_func) {
         httpRequestHandler.getXML("https://librivox.org/rss/" + encodeURIComponent(book_id), function (xhr) {
-            var xml = $(xhr.response)
-            chapters = Chapter.parseFromXML(xml);
-            callback_func(chapters);
+            try {
+                var xml = $.parseXML(xhr.response);
+                chapters = Chapter.parseFromXML(xml);
+                callback_func(chapters);
+            } catch (err) {
+                if (!err.hasOwnProperty('name')) {
+                    err.name = 'XMLParseError'; // becuase jQuery doesn't do this for us.
+                }
+                err_func && err_func(err);
+            }
         });
     };
 }
@@ -1857,6 +1869,16 @@ function SearchResultsPageGenerator(args) {
                 $(selectors.no_results_msg).show();
             }
         });
+        
+        if (search_string.toLocaleLowerCase().startsWith('the ')) {
+            setTimeout(() => {
+                $('#search-the-warning').popup('open', {
+                    positionTo: 'window',
+                    transition: 'pop'
+                });
+            }, 500)
+            
+        }
     }
 
     function getSearchJSON(search_string, callback_func) {
