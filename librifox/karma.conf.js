@@ -26,8 +26,7 @@ module.exports = function(config) {
 
     // list of files to exclude
     exclude: [
-        'js/load_error.js',
-        'tests/test_filesystem_book_reference_manager.js'
+        'js/load_error.js'
     ],
 
 

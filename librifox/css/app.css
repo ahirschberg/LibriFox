@@ -68,3 +68,22 @@ p {
 .player-controls .total-duration-readout {
     float: right;
 }
+
+.player-info {
+    margin: 10px;
+}
+
+.player-book-title {
+    color: #505050;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.player-chapter-title {
+    font-size: 1.5em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

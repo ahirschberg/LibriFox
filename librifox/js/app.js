@@ -65,9 +65,9 @@ Chapter.parseFromXML = function (xml_string) {
 function SearchedBookPageGenerator(args) {
     var that = this,
         httpRequestHandler = args.httpRequestHandler,
+        fsBookReferenceManager = args.fsBookReferenceManager,
         selectors = args.selectors,
         bookDownloadManager = args.bookDownloadManager,
-        bookReferenceManager = args.bookReferenceManager,
         chapter_ui_state = {},
         stored_chapters_data_handle = args.stored_chapters_data_handle,
         PROGRESSBAR_HTML =  '<div class="progressBar" style="display: none">' +
@@ -93,16 +93,16 @@ function SearchedBookPageGenerator(args) {
             });
         }
         
-        showFooterAlert({book_id: book.id});
+        showFooterAlert(book.id);
     };
     
-    function showFooterAlert(args) {
-        var book_id = args.book_id,
-            book_ref = args.book_ref,
-            show_footer = function (book_ref) {
+    function showFooterAlert(book_id) {
+        if ($(selectors.footer_alert).css('display') === 'none') {
+            var book = fsBookReferenceManager.getBook(book_id)
+            if (book) {
                 $(selectors.footer_alert)
                     .click(function () {
-                        stored_chapters_data_handle(book_ref);
+                        stored_chapters_data_handle(book);
                     })
                     .show({
                         complete: function () {
@@ -112,31 +112,24 @@ function SearchedBookPageGenerator(args) {
                             }
                         }
                     });
-            };
-        
-        if ($(selectors.footer_alert).css('display') === 'none') {
-            if (book_ref) {
-                show_footer(book_ref);
-            } else {
-                bookReferenceManager.loadBookReference(book_id, function (obj) {
-                    if (obj) {
-                        show_footer(obj);
-                    }
-                });
             }
-        } else {
-            console.log('showFooterAlert called, but the footer was already showing.  Doing nothing');
         }
     }
     
     this.registerEvents = function () {
-        $(document).on("pagecreate", selectors.page, function (event) {
+        $(document).on("pagebeforeshow", selectors.page, function (event) {
             var selectedBook = chapter_ui_state.book;
             if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
                 console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
                 return false;
             }
             that.generatePage(selectedBook);
+        });
+        
+        fsBookReferenceManager.on('change', () => {
+            if (chapter_ui_state.book) {
+                showFooterAlert(chapter_ui_state.book.id);
+            }
         });
     };
 
@@ -195,11 +188,6 @@ function SearchedBookPageGenerator(args) {
                         $(that).find('.progressBar').show();
                         $(that).find('.progressBarSlider').css('width', percentage + '%');
                     }
-                },
-                finished: function (book_ref) {
-                    showFooterAlert({
-                        book_ref: book_ref
-                    });
                 },
                 error: function () {
                     if (confirm('The file you are trying to download already exists. Delete the old version? ')) {
@@ -615,7 +603,7 @@ var MediaManager = (function () {
         event_manager;
     
     function MediaManager() {
-        db = new MediaDB("sdcard", MediaDBMetadataParser.getParser(ID3Parser), {includeFilter: /[^\.]+\.lfa$/, version: 2});
+        db = new MediaDB("sdcard", MediaDBMetadataParser.getParser(ID3Parser), {includeFilter: /[^\.]+\.lfa$/, version: 1});
         db.addEventListener('created', createdEvent);
         db.addEventListener('deleted', deletedEvent);
         db.addEventListener('opening', debug_print_cbk);
@@ -677,7 +665,7 @@ function FilesystemBookReferenceManager(args) {
     var mediaManager = args.mediaManager,
         deviceStoragesManager = args.deviceStoragesManager,
         bookReferenceManager = args.bookReferenceManager,
-        change_ui_callback,
+        event_manager = new EventManager(),
         bookFactory = new BookFactory(deviceStoragesManager.getStorage()),
         books = {
             store: {},
@@ -710,13 +698,25 @@ function FilesystemBookReferenceManager(args) {
             }
         };
     
+    this.getBook = function (id) {
+        return books.store[id];
+    }
+    
+    this.on = function (event_name, callback) {
+        event_manager.on(event_name, callback);
+    }
+    this.off = function (event_name) {
+        event_manager.off(event_name);
+    }
+    
+    event_manager.registerEvent('change');
     mediaManager.on('created', event => {
         this.addChapters(event.detail).then(() => {
-            change_ui_callback && change_ui_callback(books);
+            event_manager.trigger('change', books)
         });
     });
     
-    mediaManager.on('deleted', event => {
+    mediaManager.on('deleted', event => { // TODO I think this assumes synchronous when it might not be
         var paths = event.detail;
         paths.forEach(path => {
             books.forEach(ref => {
@@ -728,15 +728,10 @@ function FilesystemBookReferenceManager(args) {
                 });
             });
         });
-        change_ui_callback && change_ui_callback(books);
+        event_manager.trigger('change', books);
     });
     
-    this.registerChangeCallback = function (change_fn) {
-        change_ui_callback = change_fn;
-    }
-    
     function standardizeItem(mediadb_item) {
-        console.log('mediadb_item: ', mediadb_item, 'name:', mediadb_item.name);
         var path_match = MediaDBMetadataParser.getLibriVoxInfoFromPath(mediadb_item.name);
         if (path_match) {
             var book_id = parseInt(path_match[1], 10),
@@ -746,11 +741,11 @@ function FilesystemBookReferenceManager(args) {
                     store_info: {
                         id: book_id,
                         index: chapter_index,
-                        book_title: book_ref && book_ref.title || book_id,
+                        book_title: (book_ref && book_ref.title) || mediadb_item.metadata.album || mediadb_item.name,
                         user_progress: book_ref && book_ref.user_progress
                     },
                     chapter_info: {
-                        name: (book_ref && book_ref[chapter_index] && book_ref[chapter_index].name) || (chapter_index + ' - Unknown Chapter'),
+                        name: (book_ref && book_ref[chapter_index] && book_ref[chapter_index].name) || mediadb_item.metadata.title || mediadb_item.name,
                         path: mediadb_item.name
                     }
                 }
@@ -900,8 +895,7 @@ function StoredBooksListPageGenerator(args) {
         stored_chapters_data_handle = args.stored_chapters_data_handle,
         player = args.player;
 
-    
-    fsReferenceManager.registerChangeCallback((books) => {
+    fsReferenceManager.on('change', (books) => {
         console.log('updating books ui list due to filesystem change', books);
         this.refreshList(books);
     })
@@ -1549,7 +1543,8 @@ function BookPlayerPageGenerator(args) {
     function updateUIandContext (selectors, controls) {
         console.log('UpdateUIandContext with currentInfo:', player.getCurrentInfo());
         if (player.getCurrentInfo()) {
-            $(selectors.header).text(player.getCurrentInfo().chapter.name);
+            $('.player-book-title').text(player.getCurrentInfo().book.title);
+            $('.player-chapter-title').text(player.getCurrentInfo().chapter.name);
             
             player.position() && $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
             player.duration() && $(concatSelectors(controls.container, controls.duration_text)).text(player.prettifyTime(player.duration()));
@@ -1690,7 +1685,6 @@ function FileManager(storage_device) {
             $("#downloadedFiles").append(fileListItem);
         }
         var done_cb = function () {
-            console.log('found ' + times_called + ' files');
             if (times_called < 1) {
                 $("#downloadedFiles").append('<li>No files found</li>');
             }
@@ -1882,7 +1876,8 @@ function SearchResultsPageGenerator(args) {
     }
 
     function generateBookUrl(search_string, field) {
-        var sanitized_field = field;
+        var sanitized_field = field,
+            string_for_url = encodeURIComponent(search_string.trim());
         switch(field) {
             case 'title':
             case 'author':
@@ -1898,7 +1893,7 @@ function SearchResultsPageGenerator(args) {
                 console.warn('field ' + field + ' is not valid');
                 break;
         }        
-        return "https://librivox.org/api/feed/audiobooks/" + sanitized_field + encodeURIComponent(search_string) + "?&format=json";
+        return "https://librivox.org/api/feed/audiobooks/" + sanitized_field + string_for_url + "?&format=json";
     }
 }
 
@@ -1953,10 +1948,11 @@ function HttpRequestHandler() {
 
 // Instantiate app if not running in test environment
 if (lf_getDeviceStorage()) {
-    LazyLoader.load(['js/lib/async_storage.js', 'js/lib/mediadb.js'], 
-                    () => createApp());
+        LazyLoader.load(
+        ['js/lib/async_storage.js', 'js/lib/mediadb.js'], () => {
+                createApp()
+            }).catch(e => console.log(e));
 }
-
 var _mm;
 
 function createApp () {
@@ -2012,7 +2008,7 @@ function createApp () {
                 footer_alert: '#stored-chapters-shortcut-footer'
             },
             bookDownloadManager: bookDownloadManager,
-            bookReferenceManager: bookReferenceManager,
+            fsBookReferenceManager: fsBookReferenceManager,
             stored_chapters_data_handle: storedBookPageGenerator.getDataHandle()
         }),
         searchResultsPageGenerator = new SearchResultsPageGenerator({
