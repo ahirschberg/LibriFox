@@ -103,8 +103,8 @@ function SearchedBookPageGenerator(args) {
     
     function showFooterAlert(book_id) {
         if ($(selectors.footer_alert).css('display') === 'none') {
-            var book = fsBookReferenceManager.getBook(book_id)
-            if (book) {
+            var book = fsBookReferenceManager.getBook(book_id);
+            if (book && !book.hidden) {
                 $(selectors.footer_alert)
                     .click(function () {
                         stored_chapters_data_handle(book);
@@ -132,6 +132,7 @@ function SearchedBookPageGenerator(args) {
         });
         
         fsBookReferenceManager.on('change', () => {
+            console.log('updating footer alert due to filesystem change.');
             if (chapter_ui_state.book) {
                 showFooterAlert(chapter_ui_state.book.id);
             }
@@ -919,7 +920,7 @@ function StoredBooksListPageGenerator(args) {
 
     fsReferenceManager.on('change', (books) => {
         console.log('updating books ui list due to filesystem change', books);
-        this.refreshList(books);
+        refreshList(books);
     })
     
     this.registerEvents = function (_selectors) {
@@ -946,6 +947,18 @@ function StoredBooksListPageGenerator(args) {
             }).catch(e => console.error(e));
         });
     };
+    
+    function refreshList(collection) {
+        var $list = $(selectors.list);
+        $list.children('li.stored-book').remove();
+        collection.forEach(book => {
+            if (!book.hidden) {
+                createListItem(book)
+                    .appendTo($list);
+                $list.listview('refresh');
+            }
+        });
+    }
     
     function createListItem(book_obj) {
         var link = $('<a/>', {
@@ -1006,6 +1019,9 @@ function StoredBookPageGenerator(args) {
                             file_delete_success: function () {
                                 $(that).remove();
                                 $(selectors.page + ' ul').listview('refresh');
+                                if (ui_state.book.numChapters === 0) {
+                                    $.mobile.back();
+                                }
                             },
                             file_delete_error: function (error) {
                                 alert('Error deleting file: ' + error.message);
@@ -1093,7 +1109,7 @@ function StoredBookPageGenerator(args) {
                 });
         } else {
             link.click(function () {
-                player_data_handle(new PlayerInfo(ui_state.book, chapter_ref), {resume_playback: false});
+                player_data_handle(new PlayerInfo(ui_state.book, chapter_ref), {resume_playback: true});
             });
         }
         var $chapter_li = $('<li/>', {
