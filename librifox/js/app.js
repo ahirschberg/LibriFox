@@ -686,11 +686,14 @@ function FilesystemBookReferenceManager(args) {
         books = {
             store: {},
             setChapter: function (store_info, chapter_info) {
-                var obj = this.store[store_info.id];
+                var new_book = false,
+                    obj = this.store[store_info.id];
                 if (!obj) {
+                    new_book = true;
+
                     obj = bookFactory.getBlankBook();
-                    obj.title = store_info.book_title
-                    obj.id = store_info.id
+                    obj.title = store_info.book_title;
+                    obj.id = store_info.id;
                 }
                 obj.hidden = false;
                 
@@ -706,6 +709,8 @@ function FilesystemBookReferenceManager(args) {
                 }
                 
                 this.store[store_info.id] = obj;
+                
+                return new_book;
             },
             forEach: function (each_ref) {
                 Object.keys(this.store).forEach((key) => {
@@ -802,39 +807,39 @@ function FilesystemBookReferenceManager(args) {
         return promise;
     }
     
-    this.collapseChapters = function () {
+    this.dynamicLoadBooks = (each_book_fn) => {
         books.store = {};
-        var enumerate_and_collapse = function (resolve, reject) {
-            var count = 0,
-                finished_counting = false,
-                count_completed = 0;
+        var p = Promise.resolve(),
+            deferred = {};
+        deferred.promise = new Promise(resolve => {
+            deferred.resolve = resolve;
+        });
+        if (mediaManager.db.state !== 'ready' && mediaManager.db.state !== 'enumerable') {
+            mediaManager.db.addEventListener('enumerable', () => {
+                deferred.resolve(this.dynamicLoadBooks(each_book_fn));
+            })
+        } else {
             mediaManager.enumerate(item => {
-                if (item === null) {
-                    finished_counting = true;
-                    if (count_completed >= count) {
-                        resolve(books);
+                console.log('Got item in #enumerate:', item);
+                p = p.then(() => {
+                    console.log('Got item in #then:', item);
+                    if (item === null) {
+                        deferred.resolve(books);
+                    } else {
+                        return standardizeItem(item).then(to_store => {
+                            if (books.setChapter(to_store.store_info, to_store.chapter_info)) {
+                                var stored_book = this.getBook(to_store.store_info.id);
+                                setTimeout(() => { // is this necessary? I want to make sure callback doesn't block promises
+                                    each_book_fn(stored_book);
+                                });
+                            }
+                        })
                     }
-                } else {
-                    ++count;
-                    standardizeItem(item).then(to_store => {
-                        ++count_completed;
-                        books.setChapter(to_store.store_info, to_store.chapter_info);
-                        if (finished_counting && count_completed >= count) {
-                            resolve(books);
-                        }
-                    }).catch(e => reject(e));
-                }
+                });
             });
         }
-        return new Promise((resolve, reject) => {
-            if (mediaManager.db.state !== 'ready' && mediaManager.db.state !== 'enumerable') {
-                mediaManager.db.addEventListener('enumerable', () => {
-                    enumerate_and_collapse(resolve, reject);
-                })
-            } else {
-                enumerate_and_collapse(resolve, reject);
-            }
-        }).catch(e => console.error(e));
+        
+        return deferred.promise;
     }
 }
 
@@ -930,26 +935,15 @@ function StoredBooksListPageGenerator(args) {
             }
         });
         $(document).on('pagecreate', selectors.page, function () {
-            fsReferenceManager.collapseChapters().then(function (books) {
-                that.refreshList(books);
+            var $list = $(selectors.list);
+            $list.children('li.stored-book').remove();
+            fsReferenceManager.dynamicLoadBooks(function (book) {
+                if (!book.hidden) {
+                    createListItem(book)
+                        .appendTo($list);
+                    $list.listview('refresh');
+                }
             }).catch(e => console.error(e));
-        });
-    };
-    
-    this.refreshList = function (books) {
-        if (!selectors) {
-            console.warn('refreshList probably won\'t do anything: selectors is undefined');
-        }
-        var $list = $(selectors.list);
-        $list.children('li.stored-book').remove();
-        console.log('books: ', books)
-        books.forEach(function (book) {
-            if (!book.hidden) {
-                createListItem(book)
-                    .addClass('filesystem_book')
-                    .appendTo($list);
-                $list.listview('refresh');
-            }
         });
     };
     
@@ -991,13 +985,15 @@ function StoredBookPageGenerator(args) {
             var $list = $(selectors.list);
             $list.children('li.stored-chapter').remove();
             
-            var user_progress = ui_state.book.user_progress;
-            var user_progress_viable = false;
+            var user_progress = ui_state.book.user_progress,
+                user_progress_viable = false,
+                storage_devices = [];
             
             ui_state.book.eachChapter(function (chapter_ref) {
                 if (user_progress && !user_progress_viable) {
                     user_progress_viable = (chapter_ref.path === user_progress.path);
                 }
+                storage_devices.push(storageFromPath(chapter_ref.path));
                 createListItem(chapter_ref, user_progress).bind('taphold', function () {
                     var that = this;
                     $(selectors.book_actions_popup).popup('open', {
@@ -1035,6 +1031,16 @@ function StoredBookPageGenerator(args) {
                 $('.continue-playback').hide();
             }
             
+            // display to the user how many files are on each storage device
+            var string_arr = [], 
+                frequency = unique_frequency(storage_devices);
+            
+            Object.keys(frequency).forEach(storage_device => {
+                var num_chapters = frequency[storage_device];
+                string_arr.push(storage_device + ': ' + num_chapters + ' file' + (num_chapters === 1 ? '' : 's'));
+            });
+            $('.ch-storage-device').text(string_arr.join(', '));
+            
             $list.listview('refresh');
         });
         $(document).on('pagecreate', selectors.page, function () {
@@ -1046,6 +1052,26 @@ function StoredBookPageGenerator(args) {
         });
     };
     
+    function storageFromPath(path) {
+        var match = path.match(/^\/*(sdcard[^\/]*)/);
+        if (match) {
+            return match[1];
+        } else {
+            return 'Unknown storage';
+        }
+    }
+    
+    // must be an array of objects that can be properties (Strings, numbers)
+    function unique_frequency(arr) {
+        var uniques = {};
+        arr.forEach(function (e, i) {
+            var count = uniques[e] || 0
+            uniques[e] = ++count;
+        });
+        
+        return uniques;
+    }
+    
     function createListItem(chapter_ref, user_progress) {
         var link = $('<a/>', {
             'class': 'showFullText',
@@ -1056,7 +1082,7 @@ function StoredBookPageGenerator(args) {
         var resume_playback_li = false;
         if (user_progress && chapter_ref.path === user_progress.path) {
             resume_playback_li = true;
-            link.text('\u25BA ' + link.text())
+            link.text(Player.getDisplayState(chapter_ref.path) + link.text())
                 .click(function () {
                     player_data_handle(
                         new PlayerInfo(ui_state.book, user_progress), {
@@ -1435,6 +1461,19 @@ function Player(args) {
             return current_info.info_obj;
         }
     }
+    
+    // check if path from user progress is currently playing, paused, or stored
+    Player.getDisplayState = (path) => {
+        if (this.getCurrentInfo() === null || path !== this.getCurrentInfo().chapter.path) {
+            return '\u27A4';
+        } else {
+            if (this.paused()) {
+                return '\u275A\u275A ' // pause
+            } else {
+                return '\u25BA ' // play
+            }
+        }
+    };
 }
 
 function PlayerInfo(book, chapter_to_play) {
@@ -1525,11 +1564,13 @@ function BookPlayerPageGenerator(args) {
 
             updateUIandContext(selectors, controls);
             
-            player.on('timeupdate.player-html', function () {
+            var updateTimeSlider = function () {
                 $(concatSelectors(controls.container, controls.position)).val(player.positionPercent());
                 $(concatSelectors(controls.container, controls.position)).slider('refresh');
                 $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
-            });
+            };
+            player.on('timeupdate.player-html', updateTimeSlider);
+            updateTimeSlider(); // in case player is paused when loaded
             
             player.on('loaderror.player-html', function (error_str) {
                 alert(error_str);
@@ -1540,14 +1581,22 @@ function BookPlayerPageGenerator(args) {
                 updateUIandContext(selectors, controls);
             });
             
-            player.on('play.player-html', function () {
-                console.log('play event fired');
+            var 
+            playingButtonText = function () {
                 $(concatSelectors(controls.container, controls.play)).text('Pause');
-            });
-            
-            player.on('pause.player-html', function () {
+            },
+            pausedButtonText = function () {
                 $(concatSelectors(controls.container, controls.play)).text('Play');
-            });
+            };
+            
+            player.on('play.player-html', playingButtonText);
+            player.on('pause.player-html', pausedButtonText);
+            
+            if (!player.paused()) {
+                playingButtonText();
+            } else {
+                pausedButtonText();
+            }
             
             player.on('finishedqueue.player-html', function () {
                 $.mobile.back();
@@ -1957,7 +2006,7 @@ if (lf_getDeviceStorage()) {
                 createApp()
             }).catch(e => console.log(e));
 }
-var _mm;
+var _mm, _fm;
 
 function createApp () {
     'use strict';
@@ -2080,4 +2129,5 @@ function createApp () {
     });
     
     _mm = mediaManager;
+    _fm = fsBookReferenceManager;
 }

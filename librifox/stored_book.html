@@ -13,11 +13,13 @@
             <h1>Chapters</h1>
             <a data-rel="back" data-icon="back" data-iconpos="notext"></a>
         </header>
+        <div class="ui-body">
+            <h2 class="book-title" style="margin: 5px auto;">BOOK TITLE</h2>
+            <div class="ch-storage-device" style="float:right"></div>
+        </div>
         <ul data-role="listview" id="stored-chapters-list">
-            <li>
-                <h2 class="book-title">BOOK TITLE</h2>
+            <li class="continue-playback" style="display: none"><a href="player.html">Continue playback</a>
             </li>
-            <li class="continue-playback" style="display: none"><a href="player.html">Continue playback</a></li>
         </ul>
         <div data-role="popup" id="chapterActionsMenu" data-theme="b">
             <ul data-role="listview" data-inset="true" style="min-width:210px;">
