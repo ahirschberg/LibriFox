@@ -1888,19 +1888,18 @@ function SearchResultsPageGenerator(args) {
                         'json': book_entry
                     });
                     resultsCache[book.id] = book;
-                    $('<li/>')
-                        .html(
-                            $('<a>')
-                                .attr('href', 'searched_book.html')
-                                .append(
-                                    $('<h2/>').text(book.title)
-                                )
-                                .append(
-                                    $('<p/>').text(book.description)
-                                )
-                        ).click(function () {
-                            sr_chapters_data_handle(book);
-                        }).appendTo(selectors.results_list);
+                    $('<li/>').html(
+                        $('<a>')
+                            .attr('href', 'searched_book.html')
+                            .append(
+                                $('<h2/>').text(book.title)
+                            )
+                            .append(
+                                $('<p/>').text(book.description)
+                            )
+                    ).click(function () {
+                        sr_chapters_data_handle(book);
+                    }).appendTo(selectors.results_list);
                 });
                 $(selectors.results_list).listview('refresh');
             } else {
