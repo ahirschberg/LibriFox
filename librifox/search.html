@@ -18,9 +18,8 @@
 
         <header data-role="header">
             <h1>Search</h1>
-            <!-- TODO fix overflow cutoff? -->
             <a data-rel="back" data-icon="back" data-iconpos="notext"></a>
-            <a data-icon="gear" data-iconpos="notext" href="#search-settings" data-rel="popup"></a>
+            <a data-icon="action" data-iconpos="notext" href="#search-settings" data-rel="popup"></a>
         </header>
         <form id="search-form">
             <input type="search" placeholder="Enter a written work" name="search-mini" id="books-search-bar" data-mini="true" />
@@ -33,7 +32,7 @@
             <ul data-role="listview" data-inset="true" style="min-width:210px;">
                 <li data-role="list-divider">Search by</li>
                 <li><a href="#" class="search-by-title">Title
-                    <p>Full title or beginning of title</p>
+                    <p>Beginning of title or full title</p>
                     </a>
                 </li>
                 <li><a href="#" class="search-by-lname">
@@ -43,7 +42,7 @@
                 </li>
                 <li><a href="#" class="search-by-id">
                     LibriVox ID
-                    <p>The exact id of the book</p>
+                    <p>Used by LibriVox API</p>
                     </a>
                 </li>
             </ul>
@@ -51,7 +50,7 @@
 
         <!-- Searched 'The' warning popup -->
         <div data-role="popup" id="search-the-warning" data-theme="a">
-            <!--a href="#" data-rel="back" class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-left">Close</a-->
+            <a href="#" data-rel="back" class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-left">Close</a>
             <div data-role="header" data-theme="b">
                 <h1>Search Tip</h1>
             </div>
