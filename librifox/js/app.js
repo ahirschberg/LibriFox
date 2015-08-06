@@ -1033,18 +1033,17 @@ function StoredBookPageGenerator(args) {
             });
             var $resume_progress;
             if (user_progress_viable) { // if the user progress still matches a chapter path
-                $('.continue-playback')
+                $(selectors.contine_playback_button)
                     .click(function () {
                         player_data_handle(
                             new PlayerInfo(ui_state.book, user_progress), {
-                                position: user_progress.position,
-                                resume_playback: true
+                                position: user_progress.position
                             }
                         )
                     })
                     .show();
             } else {
-                $('.continue-playback').hide();
+                $(selectors.contine_playback_button).hide();
             }
             
             // display to the user how many files are on each storage device
@@ -1055,7 +1054,7 @@ function StoredBookPageGenerator(args) {
                 var num_chapters = frequency[storage_device];
                 string_arr.push(storage_device + ': ' + num_chapters + ' file' + (num_chapters === 1 ? '' : 's'));
             });
-            $('.ch-storage-device').text(string_arr.join(', '));
+            $(selectors.storage_device_info).text(string_arr.join(', '));
             
             $list.listview('refresh');
         });
@@ -1095,21 +1094,18 @@ function StoredBookPageGenerator(args) {
             text: chapter_ref.name
         });
         
-        var resume_playback_li = false;
         if (user_progress && chapter_ref.path === user_progress.path) {
-            resume_playback_li = true;
-            link.text(Player.getDisplayState(chapter_ref.path) + link.text())
+            link.text(Player.getProgressDisplayText(chapter_ref.path) + link.text())
                 .click(function () {
                     player_data_handle(
                         new PlayerInfo(ui_state.book, user_progress), {
                             position: user_progress.position,
-                            resume_playback: true
                         }
                     )
                 });
         } else {
             link.click(function () {
-                player_data_handle(new PlayerInfo(ui_state.book, chapter_ref), {resume_playback: true});
+                player_data_handle(new PlayerInfo(ui_state.book, chapter_ref));
             });
         }
         var $chapter_li = $('<li/>', {
@@ -1479,9 +1475,10 @@ function Player(args) {
     }
     
     // check if path from user progress is currently playing, paused, or stored
-    Player.getDisplayState = (path) => {
+    // assumes user storage pointing to path is checked elsewhere
+    Player.getProgressDisplayText = (path) => {
         if (this.getCurrentInfo() === null || path !== this.getCurrentInfo().chapter.path) {
-            return '\u27A4';
+            return '\u27A4'; // stored (arrowhead)
         } else {
             if (this.paused()) {
                 return '\u275A\u275A ' // pause
@@ -1537,20 +1534,13 @@ function BookPlayerPageGenerator(args) {
             player_context.playerInfo = playerInfo;
             if (options) {
                 player_context.position = options.position;
-                player_context.resume_playback = options.resume_playback;
-            }
-            
-            if (!player_context.hasOwnProperty('resume_playback')) {
-                player_context.resume_playback = true;
             }
         }
     }
 
     this.registerEvents = function (selectors) {
         var page = selectors.page;
-        $(document).on("pagebeforeshow", selectors.page, function (event) {
-            console.log('player.html page being generated...');
-            
+        $(document).on("pagebeforeshow", selectors.page, function (event) {            
             var controls = selectors.controls;
             if (player_context) {
                 if (!player.getCurrentInfo() ||  // if nothing is playing 
@@ -1568,14 +1558,14 @@ function BookPlayerPageGenerator(args) {
                     }
                     player.queueBook(player_context.playerInfo, options);
                     player_context = undefined; // delete player context and use player.getCurrentInfo()
-                } else if (player_context.resume_playback) {
+                } else {
                     player.play();
                 }
-            } else if (!player.getCurrentInfo()) {
-                console.warn('Tried to load player.html without player_context no player.getCurrentInfo()');
-                return false;
-            } else {
+            } else if (player.getCurrentInfo()) {
                 console.log('Player.html: no player_context, falling back on player.getCurrentInfo()');
+            } else {
+                console.warn('Tried to load player.html with no player_context or player.getCurrentInfo()');
+                return false;
             }
 
             updateUIandContext(selectors, controls);
@@ -1696,6 +1686,7 @@ function SettingsManager (args) {
         });
     };
 }
+
 function SettingsPageGenerator(args) {
     var settings = args.settings,
         deviceStoragesManager = args.deviceStoragesManager;
@@ -1897,19 +1888,18 @@ function SearchResultsPageGenerator(args) {
                         'json': book_entry
                     });
                     resultsCache[book.id] = book;
-                    $('<li/>')
-                        .html(
-                            $('<a>')
-                                .attr('href', 'searched_book.html')
-                                .append(
-                                    $('<h2/>').text(book.title)
-                                )
-                                .append(
-                                    $('<p/>').text(book.description)
-                                )
-                        ).click(function () {
-                            sr_chapters_data_handle(book);
-                        }).appendTo(selectors.results_list);
+                    $('<li/>').html(
+                        $('<a>')
+                            .attr('href', 'searched_book.html')
+                            .append(
+                                $('<h2/>').text(book.title)
+                            )
+                            .append(
+                                $('<p/>').text(book.description)
+                            )
+                    ).click(function () {
+                        sr_chapters_data_handle(book);
+                    }).appendTo(selectors.results_list);
                 });
                 $(selectors.results_list).listview('refresh');
             } else {
@@ -1995,8 +1985,6 @@ function HttpRequestHandler() {
         xhr.addEventListener('error', other_args.error_callback);
         xhr.addEventListener('timeout', other_args.timeout_callback);
         xhr.addEventListener('progress', other_args.progress_callback);
-        //  xhr.upload.addEventListener("load", transferComplete, false);
-        //  xhr.upload.addEventListener("abort", transferCanceled, false);
         xhr.open('GET', url);
         if (type != 'xml') {
             xhr.responseType = type;
@@ -2017,12 +2005,10 @@ function HttpRequestHandler() {
 
 // Instantiate app if not running in test environment
 if (lf_getDeviceStorage()) {
-        LazyLoader.load(
-        ['js/lib/async_storage.js', 'js/lib/mediadb.js'], () => {
-                createApp()
-            }).catch(e => console.log(e));
+    LazyLoader.load(['js/lib/async_storage.js', 'js/lib/mediadb.js'], () => {
+            createApp()
+    });
 }
-var _mm, _fm;
 
 function createApp () {
     'use strict';
@@ -2107,7 +2093,9 @@ function createApp () {
         header_title: '.book-title',
         list: '#stored-chapters-list',
         page: '#storedBookPage',
-        book_actions_popup: '#chapterActionsMenu'
+        book_actions_popup: '#chapterActionsMenu',
+        contine_playback_button: '.continue-playback',
+        storage_device_info: '.ch-storage-device'
     });
     bookPlayerPageGenerator.registerEvents({
         page: '#bookPlayer',
@@ -2135,15 +2123,4 @@ function createApp () {
         page: '#mainSettings',
         folder_path_form: '#user-folder-form'
     });
-
-    $(document).on("pagebeforeshow", "#homeFileManager", function () {
-        $('#deleteAll').click(function () {
-            fileManager.deleteAllAppFiles();
-            asyncStorage.clear(); // remove references
-        });
-        fileManager.displayAppFiles();
-    });
-    
-    _mm = mediaManager;
-    _fm = fsBookReferenceManager;
 }
