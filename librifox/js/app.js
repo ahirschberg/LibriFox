@@ -812,8 +812,9 @@ function FilesystemBookReferenceManager(args) {
         books.store = {};
         var p = Promise.resolve(),
             deferred = {};
-        deferred.promise = new Promise(resolve => {
+        deferred.promise = new Promise((resolve, reject) => {
             deferred.resolve = resolve;
+            deferred.reject = reject;
         });
         if (mediaManager.db.state !== 'ready' && mediaManager.db.state !== 'enumerable') {
             mediaManager.db.addEventListener('enumerable', () => {
@@ -823,23 +824,26 @@ function FilesystemBookReferenceManager(args) {
             mediaManager.enumerate(item => {
                 console.log('Got item in #enumerate:', item);
                 p = p.then(() => {
-                    console.log('Got item in #then:', item);
-                    if (item === null) {
-                        deferred.resolve(books);
-                    } else {
-                        return standardizeItem(item).then(to_store => {
-                            if (books.setChapter(to_store.store_info, to_store.chapter_info)) {
-                                var stored_book = this.getBook(to_store.store_info.id);
-                                setTimeout(() => { // is this necessary? I want to make sure callback doesn't block promises
-                                    each_book_fn(stored_book);
-                                });
-                            }
-                        })
+                    try {
+                        console.log('Got item in #then:', item);
+                        if (item === null) {
+                            deferred.resolve(books);
+                        } else {
+                            return standardizeItem(item).then(to_store => {
+                                if (books.setChapter(to_store.store_info, to_store.chapter_info)) {
+                                    var stored_book = this.getBook(to_store.store_info.id);
+                                    setTimeout(() => { // is this necessary? I want to make sure callback doesn't block promises
+                                        each_book_fn(stored_book);
+                                    });
+                                }
+                            })
+                        }
+                    } catch (e) {
+                        deferred.reject(e);
                     }
                 });
             });
         }
-        
         return deferred.promise;
     }
 }
@@ -1540,7 +1544,7 @@ function BookPlayerPageGenerator(args) {
 
     this.registerEvents = function (selectors) {
         var page = selectors.page;
-        $(document).on("pagebeforeshow", selectors.page, function (event) {            
+        $(document).on("pagebeforeshow", selectors.page, function (event) {
             var controls = selectors.controls;
             if (player_context) {
                 if (!player.getCurrentInfo() ||  // if nothing is playing 
@@ -1575,6 +1579,7 @@ function BookPlayerPageGenerator(args) {
                 $(concatSelectors(controls.container, controls.position)).slider('refresh');
                 $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
             };
+            
             player.on('timeupdate.player-html', updateTimeSlider);
             updateTimeSlider(); // in case player is paused when loaded
             
@@ -1633,15 +1638,14 @@ function BookPlayerPageGenerator(args) {
         });
         
         $(document).on('pagehide', selectors.page, function (event) {
-            player.off('*.player-html');
+            player.off('*.player-html'); // remove all player-html namespaced events
         });
     };
     
     function updateUIandContext (selectors, controls) {
-        console.log('UpdateUIandContext with currentInfo:', player.getCurrentInfo());
         if (player.getCurrentInfo()) {
-            $('.player-book-title').text(player.getCurrentInfo().book.title);
-            $('.player-chapter-title').text(player.getCurrentInfo().chapter.name);
+            $(selectors.book_title).text(player.getCurrentInfo().book.title);
+            $(selectors.chapter_title).text(player.getCurrentInfo().chapter.name);
             
             player.position() && $(concatSelectors(controls.container, controls.position_text)).text(player.prettifyTime(player.position()));
             player.duration() && $(concatSelectors(controls.container, controls.duration_text)).text(player.prettifyTime(player.duration()));
@@ -1665,7 +1669,6 @@ function SettingsManager (args) {
         return new Promise(resolve => {
             this.get(st_settings_key).then(() => {
                 settings[key] = value;
-                console.log('settings object is now', settings);
 
                 async_storage.setItem(st_settings_key, settings, () => {
                     resolve(settings);
@@ -1733,8 +1736,6 @@ function DeviceStoragesManager(args) { // untested
     settings.get('downloads_storage_device_index').then(value => {
         this.setDownloadsDeviceByIndex(value || 0);
     });
-    
-
     
     this.setDownloadsDeviceByIndex = function (index) {
         if (isFinite(index) && Math.floor(index) == index) {
@@ -2100,6 +2101,8 @@ function createApp () {
     bookPlayerPageGenerator.registerEvents({
         page: '#bookPlayer',
         header: '.player-header',
+        book_title: '.player-book-title',
+        chapter_title: '.player-chapter-title',
         controls: {
             container: '.player-controls',
             play: '.play',
