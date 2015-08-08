@@ -763,11 +763,18 @@ function FilesystemBookReferenceManager(args) {
                     store_info: {
                         id: book_id,
                         index: chapter_index,
-                        book_title: (book_ref && book_ref.title) || mediadb_item.metadata.album || mediadb_item.name,
+                        book_title: (book_ref && book_ref.title) ||
+                                    (mediadb_item.metadata &&
+                                        mediadb_item.metadata.album) ||
+                                    'Book id: ' + book_id,
                         user_progress: book_ref && book_ref.user_progress
                     },
                     chapter_info: {
-                        name: (book_ref && book_ref[chapter_index] && book_ref[chapter_index].name) || mediadb_item.metadata.title || mediadb_item.name,
+                        name: (book_ref &&
+                                book_ref[chapter_index] &&
+                                book_ref[chapter_index].name) ||
+                            mediadb_item.metadata.title ||
+                            mediadb_item.name,
                         path: mediadb_item.name
                     }
                 }
@@ -811,40 +818,39 @@ function FilesystemBookReferenceManager(args) {
     this.dynamicLoadBooks = (each_book_fn) => {
         books.store = {};
         var p = Promise.resolve(),
-            deferred = {};
-        deferred.promise = new Promise((resolve, reject) => {
-            deferred.resolve = resolve;
-            deferred.reject = reject;
+            all_enumerated_deferred = {};
+        all_enumerated_deferred.promise = new Promise((resolve, reject) => {
+            all_enumerated_deferred.resolve = resolve;
+            all_enumerated_deferred.reject = reject;
         });
         if (mediaManager.db.state !== 'ready' && mediaManager.db.state !== 'enumerable') {
             mediaManager.db.addEventListener('enumerable', () => {
-                deferred.resolve(this.dynamicLoadBooks(each_book_fn));
+                all_enumerated_deferred.resolve(this.dynamicLoadBooks(each_book_fn));
             })
-        } else {
+        } else { // trying to get errors to output here was a nightmare,
+                 // maybe I'm not using promises correctly?
             mediaManager.enumerate(item => {
                 console.log('Got item in #enumerate:', item);
                 p = p.then(() => {
-                    try {
-                        console.log('Got item in #then:', item);
-                        if (item === null) {
-                            deferred.resolve(books);
-                        } else {
-                            return standardizeItem(item).then(to_store => {
-                                if (books.setChapter(to_store.store_info, to_store.chapter_info)) {
-                                    var stored_book = this.getBook(to_store.store_info.id);
-                                    setTimeout(() => { // is this necessary? I want to make sure callback doesn't block promises
-                                        each_book_fn(stored_book);
-                                    });
-                                }
-                            })
-                        }
-                    } catch (e) {
-                        deferred.reject(e);
+                    console.log('Got item in #then:', item);
+                    if (item === null) {
+                        all_enumerated_deferred.resolve(books);
+                    } else {
+                        return standardizeItem(item).then(to_store => {
+                            if (books.setChapter(to_store.store_info, to_store.chapter_info)) {
+                                var stored_book = this.getBook(to_store.store_info.id);
+                                each_book_fn(stored_book);
+                            }
+                        })
                     }
+                    
+                }).catch(e => {
+                    all_enumerated_deferred.reject(e);
+                    throw e;
                 });
             });
         }
-        return deferred.promise;
+        return all_enumerated_deferred.promise;
     }
 }
 
@@ -1803,14 +1809,14 @@ function FileManager(args) {
         } else {
             var req = storage_device.addNamed(blob, filepath);
             req.onsuccess = function () {
-                deferred.resolve(this.result);
+                all_enumerated_deferred.resolve(this.result);
             }
             req.onerror = function () {
-                deferred.reject(this.error);
+                all_enumerated_deferred.reject(this.error);
             }
         }
         
-        return deferred.promise;
+        return all_enumerated_deferred.promise;
     };
     
     this.deleteFile = function (filepath) {
