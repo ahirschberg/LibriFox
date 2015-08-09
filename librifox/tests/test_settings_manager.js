@@ -27,7 +27,7 @@ describe('SettingsManager()', function () {
             }).catch(PROMISE_CATCH);
             
         });
-        it('loads from settings object when called after first time', function () {
+        it('loads from settings object when called after first time', function (done) {
             sm.get('lf_settings').then(() => {
                 var spy = sinon.spy(async_storage, 'getItem');
                 sm.get('lf_settings').then(() => {
@@ -39,21 +39,24 @@ describe('SettingsManager()', function () {
         })
     })
     describe('#set()', function () {
-        it('sets the value to the key', function () {
-            sm.set('another_key', 'value').then( () => {
-                sm.get('another_key').then(value => {
-                    expect(value).to.equal('value')
-                });
-            })
+        it('sets the value to the key', function (done) {
+            sm.set('another_key', 'value').then(() => {
+                return sm.get('another_key')
+            }).then(value => {
+                expect(value).to.equal('value')
+                done();
+            });
         });
-        it('writes settings object to storage', function () {
+        it('writes settings object to storage', function (done) {
             async_storage.getItem('lf_settings', function (obj) {
                 expect(obj).not.to.have.property('another_key');
-            });
-            sm.set('another_key', 'value');
-            async_storage.getItem('lf_settings', function (obj) {
-                expect(obj).property('another_key', 'value');
-            });
+                sm.set('another_key', 'value').then(() => {
+                    async_storage.getItem('lf_settings', function (obj) {
+                        expect(obj).property('another_key', 'value');
+                        done();
+                    });
+                });
+            });            
         });
     });
 });

@@ -290,10 +290,6 @@ function BookDownloadManager(args) {
     }
 }
 
-var lf_getDeviceStorage = function (storage_str) {
-    return navigator.getDeviceStorage && navigator.getDeviceStorage(storage_str || 'sdcard');
-}
-
 function BookStorageManager(args) {
     'use strict';
     var that = this,
@@ -1697,7 +1693,7 @@ function SettingsManager (args) {
 }
 
 function SettingsPageGenerator(args) {
-    var settings = args.settings,
+    var settingsManager = args.settingsManager,
         deviceStoragesManager = args.deviceStoragesManager;
     
     this.registerEvents = function (selectors) {
@@ -1733,19 +1729,19 @@ function SettingsPageGenerator(args) {
 
 function DeviceStoragesManager(args) { // untested
     'use strict'
-    var settings = args.settings,
+    var settingsManager = args.settingsManager,
         downloads_storage_index,
         downloads_storage_name,
         fileManager = args.fileManager,
         nav = args.navigator || navigator;
     
-    settings.get('downloads_storage_device_index').then(value => {
+    settingsManager.get('downloads_storage_device_index').then(value => {
         this.setDownloadsDeviceByIndex(value || 0);
     });
     
     this.setDownloadsDeviceByIndex = function (index) {
         if (isFinite(index) && Math.floor(index) == index) {
-            settings.set('downloads_storage_device_index', index);
+            settingsManager.set('downloads_storage_device_index', index);
             downloads_storage_index = index;
             
             downloads_storage_name = nav.getDeviceStorages('sdcard')[index].storageName;            
@@ -2010,88 +2006,92 @@ function HttpRequestHandler() {
     };
 }
 
-// Instantiate app if not running in test environment
-if (lf_getDeviceStorage()) {
+// Instantiate app if not running in test environment 
+// by checking if FXOS filesystem function is defined
+if (typeof navigator.getDeviceStorage === 'function') {
     LazyLoader.load(['js/lib/async_storage.js', 'js/lib/mediadb.js'], () => {
-            createApp()
+        createApp()
     });
 }
 
 function createApp () {
     'use strict';
-    var settings = new SettingsManager({
-            asyncStorage: asyncStorage
-        }),
-        mediaManager = new MediaManager(),
-        fileManager = new FileManager({
-            storage_device: lf_getDeviceStorage(),
-            mediaManager: mediaManager
-        }),
-        httpRequestHandler = new HttpRequestHandler(),
-        player = new Player({
-            fileManager: fileManager
-        }),
-        deviceStoragesManager = new DeviceStoragesManager({
-            settings: settings,
-            fileManager: fileManager
-        }),
-        bookReferenceManager = new BookReferenceManager({
-            asyncStorage: asyncStorage,
-            fileManager: fileManager
-        }),
-        bookStorageManager = new BookStorageManager({
-            deviceStoragesManager: deviceStoragesManager,
-            referenceManager: bookReferenceManager
-        }),
-        fsBookReferenceManager = new FilesystemBookReferenceManager({
-            deviceStoragesManager: deviceStoragesManager,
-            mediaManager: mediaManager,
-            bookReferenceManager: bookReferenceManager
-        }),
-        playerProgressManager = new PlayerProgressManager({
-            player: player,
-            referenceManager: bookReferenceManager
-        }),
-        bookDownloadManager = new BookDownloadManager({
-            httpRequestHandler: httpRequestHandler,
-            storageManager: bookStorageManager,
-            fileManager: fileManager
-        }),
-        bookPlayerPageGenerator = new BookPlayerPageGenerator({
-            fileManager: fileManager,
-            player: player
-        }),
-        storedBookPageGenerator = new StoredBookPageGenerator({
-            player_data_handle: bookPlayerPageGenerator.getDataHandle(),
-        }),
-        searchedBookPageGenerator = new SearchedBookPageGenerator({
-            httpRequestHandler: httpRequestHandler,
-            selectors: {
-                page: '#searchedBookPage',
-                list: '.searched-chapters-list',
-                book_title: '.book-title-disp',
-                book_description: '.book-desc-disp',
-                footer_alert: '#stored-chapters-shortcut-footer'
-            },
-            bookDownloadManager: bookDownloadManager,
-            fsBookReferenceManager: fsBookReferenceManager,
-            stored_chapters_data_handle: storedBookPageGenerator.getDataHandle()
-        }),
-        searchResultsPageGenerator = new SearchResultsPageGenerator({
-            httpRequestHandler: httpRequestHandler,
-            sr_chapters_data_handle: searchedBookPageGenerator.getDataHandle()
-        }),
-        storedBooksListPageGenerator = new StoredBooksListPageGenerator({
-            bookReferenceManager: bookReferenceManager,
-            fsBookReferenceManager: fsBookReferenceManager,
-            stored_chapters_data_handle: storedBookPageGenerator.getDataHandle(),
-            player: player
-        }),
-        settingsPageGenerator = new SettingsPageGenerator({
-            settings: settings,
-            deviceStoragesManager: deviceStoragesManager
-        });
     
+    var // define objects for page generation and background behavior
+    settingsManager = new SettingsManager({
+        asyncStorage: asyncStorage
+    }),
+    mediaManager = new MediaManager(),
+    fileManager = new FileManager({
+        storage_device: navigator.getDeviceStorage('sdcard'),
+        mediaManager: mediaManager
+    }),
+    httpRequestHandler = new HttpRequestHandler(),
+    player = new Player({
+        fileManager: fileManager
+    }),
+    deviceStoragesManager = new DeviceStoragesManager({
+        settingsManager: settingsManager,
+        fileManager: fileManager
+    }),
+    bookReferenceManager = new BookReferenceManager({
+        asyncStorage: asyncStorage,
+        fileManager: fileManager
+    }),
+    bookStorageManager = new BookStorageManager({
+        deviceStoragesManager: deviceStoragesManager,
+        referenceManager: bookReferenceManager
+    }),
+    fsBookReferenceManager = new FilesystemBookReferenceManager({
+        deviceStoragesManager: deviceStoragesManager,
+        mediaManager: mediaManager,
+        bookReferenceManager: bookReferenceManager
+    }),
+    playerProgressManager = new PlayerProgressManager({
+        player: player,
+        referenceManager: bookReferenceManager
+    }),
+    bookDownloadManager = new BookDownloadManager({
+        httpRequestHandler: httpRequestHandler,
+        storageManager: bookStorageManager,
+        fileManager: fileManager
+    }),
+    bookPlayerPageGenerator = new BookPlayerPageGenerator({
+        fileManager: fileManager,
+        player: player
+    }),
+    storedBookPageGenerator = new StoredBookPageGenerator({
+        player_data_handle: bookPlayerPageGenerator.getDataHandle(),
+    }),
+    searchedBookPageGenerator = new SearchedBookPageGenerator({
+        httpRequestHandler: httpRequestHandler,
+        selectors: {
+            page: '#searchedBookPage',
+            list: '.searched-chapters-list',
+            book_title: '.book-title-disp',
+            book_description: '.book-desc-disp',
+            footer_alert: '#stored-chapters-shortcut-footer'
+        },
+        bookDownloadManager: bookDownloadManager,
+        fsBookReferenceManager: fsBookReferenceManager,
+        stored_chapters_data_handle: storedBookPageGenerator.getDataHandle()
+    }),
+    searchResultsPageGenerator = new SearchResultsPageGenerator({
+        httpRequestHandler: httpRequestHandler,
+        sr_chapters_data_handle: searchedBookPageGenerator.getDataHandle()
+    }),
+    storedBooksListPageGenerator = new StoredBooksListPageGenerator({
+        bookReferenceManager: bookReferenceManager,
+        fsBookReferenceManager: fsBookReferenceManager,
+        stored_chapters_data_handle: storedBookPageGenerator.getDataHandle(),
+        player: player
+    }),
+    settingsPageGenerator = new SettingsPageGenerator({
+        settingsManager: settingsManager,
+        deviceStoragesManager: deviceStoragesManager
+    });
+    
+    // register events for
     storedBooksListPageGenerator.registerEvents({
         list: '#stored-books-list',
         page: '#storedBooksList',
