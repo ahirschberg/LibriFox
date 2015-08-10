@@ -736,7 +736,7 @@ function FilesystemBookReferenceManager(args) {
         });
     });
     
-    mediaManager.on('deleted', event => { // TODO I think this assumes synchronous when it might not be
+    mediaManager.on('deleted', event => {
         var paths = event.detail;
         paths.forEach(path => {
             books.forEach(ref => {
@@ -837,7 +837,7 @@ function FilesystemBookReferenceManager(args) {
                         return standardizeItem(item).then(to_store => {
                             if (books.setChapter(to_store.store_info, to_store.chapter_info)) {
                                 var stored_book = this.getBook(to_store.store_info.id);
-                                each_book_fn(stored_book);
+                                each_book_fn && each_book_fn(stored_book);
                             }
                         })
                     }
@@ -890,7 +890,7 @@ function BookFactory (fileManager) {
                 }
             });
         },
-        eachChapter: function (each_fn, done_fn) {
+        eachChapter: function (each_fn) {
             var keys = Object.keys(this),
                 length = keys.length,
                 i = 0;
@@ -902,7 +902,6 @@ function BookFactory (fileManager) {
             if (!stop) {
                 this.noindex && this.noindex.some(each_fn);
             }
-            done_fn && done_fn();
         },
         get numChapters() {
             var count = 0;
