@@ -729,8 +729,10 @@ function FilesystemBookReferenceManager(args) {
     
     event_manager.registerEvent('change');
     mediaManager.on('created', event => {
-        this.addChapters(event.detail).then(() => {
+        addChapters(event.detail).then(() => {
             event_manager.trigger('change', books)
+        }).catch(e => {
+            console.error('Caught error in FSBRM file created event:', e, '\n', e.stack)
         });
     });
     
@@ -750,18 +752,19 @@ function FilesystemBookReferenceManager(args) {
     });
     
     function standardizeItem(mediadb_item) {
+        console.log('item: ', mediadb_item)
         var path_match = MediaDBMetadataParser.getLibriVoxInfoFromPath(mediadb_item.name);
         if (path_match) {
             var book_id = parseInt(path_match[1], 10),
                 chapter_index = parseInt(path_match[2], 10);
             return bookReferenceManager.loadBookReference(book_id).then(book_ref => {
+                var metadata = mediadb_item.metadata || {};
                 var obj = {
                     store_info: {
                         id: book_id,
                         index: chapter_index,
                         book_title: (book_ref && book_ref.title) ||
-                                    (mediadb_item.metadata &&
-                                        mediadb_item.metadata.album) ||
+                                    metadata.album ||
                                     'Book id: ' + book_id,
                         user_progress: book_ref && book_ref.user_progress
                     },
@@ -769,7 +772,7 @@ function FilesystemBookReferenceManager(args) {
                         name: (book_ref &&
                                 book_ref[chapter_index] &&
                                 book_ref[chapter_index].name) ||
-                            mediadb_item.metadata.title ||
+                            metadata.title ||
                             mediadb_item.name,
                         path: mediadb_item.name
                     }
@@ -793,13 +796,12 @@ function FilesystemBookReferenceManager(args) {
                 if (fs_book_ref) {
                     obj.store_info.user_progress = fs_book_ref.user_progress;
                 }
-                console.log('returning obj: ', obj);
                 return obj;
             });
         }
     }
     
-    this.addChapters = function (collection) {
+    function addChapters (collection) {
         var promise = Promise.resolve();
         collection.forEach(each_ref => {
             promise = promise.then(() => {
@@ -2091,7 +2093,7 @@ function createApp () {
         deviceStoragesManager: deviceStoragesManager
     });
     
-    // register events for
+    // register page events
     storedBooksListPageGenerator.registerEvents({
         list: '#stored-books-list',
         page: '#storedBooksList',
