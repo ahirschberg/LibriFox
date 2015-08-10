@@ -63,11 +63,12 @@ Chapter.parseFromXML = function (xml_string) {
 };
 
 function SearchedBookPageGenerator(args) {
+    'use strict';
     var that = this,
         httpRequestHandler = args.httpRequestHandler,
         fsBookReferenceManager = args.fsBookReferenceManager,
-        selectors = args.selectors,
         bookDownloadManager = args.bookDownloadManager,
+        selectors,
         chapter_ui_state = {},
         stored_chapters_data_handle = args.stored_chapters_data_handle,
         PROGRESSBAR_HTML =  '<div class="progressBar" style="display: none">' +
@@ -79,27 +80,6 @@ function SearchedBookPageGenerator(args) {
             chapter_ui_state.chapter = chapter;
         }
     }
-    
-    this.generatePage = function (book) {
-        $(selectors.book_title).text(book.title);
-        $(selectors.book_description).text(book.description);
-        
-        if (book.chapters) {
-            showLocalChapters(book);
-        } else {
-            getChaptersFromFeed(book.id, function (chapters) {
-                book.chapters = chapters;
-                showLocalChapters(book);
-            }, function (err) {
-                console.error('Error getting chapters for ' + book.title, err);
-                $error_li = $('<li/>').text('Error getting chapters: ' + err.name);
-                $(selectors.list).append($error_li);
-                $(selectors.list).listview('refresh');
-            });
-        }
-        
-        showFooterAlert(book.id);
-    };
     
     function showFooterAlert(book_id) {
         if ($(selectors.footer_alert).css('display') === 'none') {
@@ -121,14 +101,36 @@ function SearchedBookPageGenerator(args) {
         }
     }
     
-    this.registerEvents = function () {
+    this.registerEvents = function (_selectors) {
+        selectors = _selectors;
+        if (!selectors.page) {
+            console.warn('Selectors.page is undefined for SearchedBookPageGenerator');
+        }
         $(document).on("pagebeforeshow", selectors.page, function (event) {
-            var selectedBook = chapter_ui_state.book;
-            if (!selectedBook) { // selectedBook is undefined if you refresh the app from WebIDE on a chapter list page
-                console.warn("Chapters List: selectedBook was undefined, which freezes the app.  Did you refresh from WebIDE?");
+            console.log('pagebeforeshow called');
+            var book = chapter_ui_state.book;
+            if (!book) {
+                console.warn("Chapters List: book was undefined, which freezes the app.  Did you refresh from WebIDE?");
                 return false;
             }
-            that.generatePage(selectedBook);
+            $(selectors.book_title).text(book.title);
+            $(selectors.book_description).text(book.description);
+
+            if (book.chapters) {
+                showLocalChapters(book);
+            } else {
+                getChaptersFromFeed(book.id, function (chapters) {
+                    book.chapters = chapters;
+                    showLocalChapters(book);
+                }, function (err) {
+                    console.error('Error getting chapters for ' + book.title, err);
+                    var $error_li = $('<li/>').text('Error getting chapters: ' + err.name);
+                    $(selectors.list).append($error_li);
+                    $(selectors.list).listview('refresh');
+                });
+            }
+
+            showFooterAlert(book.id);
         });
         
         fsBookReferenceManager.on('change', () => {
@@ -208,8 +210,8 @@ function SearchedBookPageGenerator(args) {
     function getChaptersFromFeed(book_id, callback_func, err_func) {
         httpRequestHandler.getXML("https://librivox.org/rss/" + encodeURIComponent(book_id), function (xhr) {
             try {
-                var xml = $.parseXML(xhr.response);
-                chapters = Chapter.parseFromXML(xml);
+                var xml = $.parseXML(xhr.response),
+                    chapters = Chapter.parseFromXML(xml);
                 callback_func(chapters);
             } catch (err) {
                 if (!err.hasOwnProperty('name')) {
@@ -1806,14 +1808,14 @@ function FileManager(args) {
         } else {
             var req = storage_device.addNamed(blob, filepath);
             req.onsuccess = function () {
-                all_enumerated_deferred.resolve(this.result);
+                deferred.resolve(this.result);
             }
             req.onerror = function () {
-                all_enumerated_deferred.reject(this.error);
+                deferred.reject(this.error);
             }
         }
         
-        return all_enumerated_deferred.promise;
+        return deferred.promise;
     };
     
     this.deleteFile = function (filepath) {
@@ -2066,13 +2068,6 @@ function createApp () {
     }),
     searchedBookPageGenerator = new SearchedBookPageGenerator({
         httpRequestHandler: httpRequestHandler,
-        selectors: {
-            page: '#searchedBookPage',
-            list: '.searched-chapters-list',
-            book_title: '.book-title-disp',
-            book_description: '.book-desc-disp',
-            footer_alert: '#stored-chapters-shortcut-footer'
-        },
         bookDownloadManager: bookDownloadManager,
         fsBookReferenceManager: fsBookReferenceManager,
         stored_chapters_data_handle: storedBookPageGenerator.getDataHandle()
@@ -2128,7 +2123,13 @@ function createApp () {
         settings_popup: '#search-settings',
         no_results_msg: '.no-available-books'
     });
-    searchedBookPageGenerator.registerEvents();
+    searchedBookPageGenerator.registerEvents({
+        page: '#searchedBookPage',
+        list: '.searched-chapters-list',
+        book_title: '.book-title-disp',
+        book_description: '.book-desc-disp',
+        footer_alert: '#stored-chapters-shortcut-footer'
+    });
     settingsPageGenerator.registerEvents({
         page: '#mainSettings',
         folder_path_form: '#user-folder-form'
