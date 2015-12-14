@@ -950,12 +950,40 @@ function StoredBooksListPageGenerator(args) {
             fsReferenceManager.dynamicLoadBooks(function (book) {
                 if (!book.hidden) {
                     createListItem(book)
+                        .bind('taphold', registerOptionsMenu(book))
                         .appendTo($list);
                     $list.listview('refresh');
                 }
             }).catch(e => console.error(e));
         });
     };
+
+    function registerOptionsMenu(book) {
+        return function() {
+            var that = this;
+            /*$(selectors.book_actions_popup).popup('open', {
+              transition: 'pop',
+              positionTo: that // neat, positions over the held element!
+              });*/
+            //$(selectors.book_actions_popup + ' .delete_book').click(function () {
+            console.log("book why no eachChapter", book);
+            book.eachChapter(chapter_ref => {
+                console.log("deleting", chapter_ref);
+                book.deleteChapter(chapter_ref.path, {
+                    delete_on_disk: true,
+                    file_delete_success: function () {
+                        $(that).remove();
+                        $(selectors.page + ' ul').listview().listview('refresh');
+                    },
+                    file_delete_error: function (error) {
+                        alert('Error deleting file: ' + error.message);
+                    }
+                });
+                $(selectors.book_actions_popup).popup('close');
+            });
+            //});
+        }
+    }
     
     function refreshList(collection) {
         var $list = $(selectors.list);
