@@ -1,5 +1,5 @@
 {
-    "version": "0.7.7",
+    "version": "0.8.0",
     "name": "LibriFox Audiobooks",
     "description": "An audiobooks app powered by LibriVox.org",
     "launch_path": "/index.html",
