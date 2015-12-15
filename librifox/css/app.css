@@ -87,3 +87,7 @@ p {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+a.player-shortcut-a {
+    text-align: center;
+}

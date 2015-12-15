@@ -935,7 +935,8 @@ function StoredBooksListPageGenerator(args) {
     this.registerEvents = function (_selectors) {
         selectors = _selectors;
         if (!selectors.page) {
-            console.warn('Selectors.page is falsy (undefined?), this causes the page event to be registered for all pages');
+            console.warn('Selectors.page is falsy (undefined?), this ' +
+                'causes the page event to be registered for all pages');
         }
         $(document).on('pagebeforeshow', selectors.page, function () {            
             if (player.getCurrentInfo()) {
@@ -950,7 +951,6 @@ function StoredBooksListPageGenerator(args) {
             fsReferenceManager.dynamicLoadBooks(function (book) {
                 if (!book.hidden) {
                     createListItem(book)
-                        .bind('taphold', registerOptionsMenu(book))
                         .appendTo($list);
                     $list.listview('refresh');
                 }
@@ -959,14 +959,7 @@ function StoredBooksListPageGenerator(args) {
     };
 
     function registerOptionsMenu(book) {
-        return function() {
-            var that = this;
-            /*$(selectors.book_actions_popup).popup('open', {
-              transition: 'pop',
-              positionTo: that // neat, positions over the held element!
-              });*/
-            //$(selectors.book_actions_popup + ' .delete_book').click(function () {
-            console.log("book why no eachChapter", book);
+        var delete_book_fn = function () {
             book.eachChapter(chapter_ref => {
                 console.log("deleting", chapter_ref);
                 book.deleteChapter(chapter_ref.path, {
@@ -981,7 +974,16 @@ function StoredBooksListPageGenerator(args) {
                 });
                 $(selectors.book_actions_popup).popup('close');
             });
-            //});
+        }
+
+        return function() {
+            var that = this;
+            $(selectors.book_actions_popup).popup('open', {
+                transition: 'pop',
+                positionTo: that // neat, positions over the held element!
+            });
+            $(selectors.book_actions_popup + ' .delete_book')
+                .click(delete_book_fn);
         }
     }
     
@@ -1009,7 +1011,7 @@ function StoredBooksListPageGenerator(args) {
         return $('<li/>', {
             'class': 'stored-book',
             html: link
-        });
+        }).bind('taphold', registerOptionsMenu(book_obj));
     }
 }
 
@@ -2119,6 +2121,7 @@ function createApp () {
     storedBooksListPageGenerator.registerEvents({
         list: '#stored-books-list',
         page: '#storedBooksList',
+        book_actions_popup:'#bookActionsMenu'
     });
     storedBookPageGenerator.registerEvents({
         header_title: '.book-title',
